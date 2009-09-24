@@ -14,48 +14,16 @@ BEGIN {
 }
 
 sub mongo {
-    my ($self, $mongo_sdk) = @_;
+    my ($self, @mongo_vars) = @_;
 
-    unless (defined $mongo_sdk && -d $mongo_sdk) {
-        print STDERR <<'ERR';
-The MONGO_SDK environment variable isn't set or it doesn't point to a
-mongodb build. Can't continue.
-
-Please MONGO_SDK to point to your MongoDB build and re-run Makefile.PL.
-ERR
-        exit 0;
+    if ($Config{osname} eq 'darwin') {
+	$self->makemaker_args( CCFLAGS => ' -arch i386 -g -pipe -fno-common -DPERL_DARWIN -no-cpp-precomp -fno-strict-aliasing -Wdeclaration-after-statement -I/usr/local/include');
+	$self->makemaker_args( LDDLFLAGS => ' -arch i386 -bundle -undefined dynamic_lookup -L/usr/local/lib');
     }
 
-    my $cc;
-    if ($ENV{CC}) {
-        $cc = $ENV{CC};
-    } elsif ($Config{gccversion} and $Config{cc}  =~ m{\bgcc\b[^/]*$}) {
-        ($cc = $Config{cc}) =~ s[\bgcc\b([^/]*)$(?:)][g\+\+$1];
-    } elsif ($Config{osname} =~ /^MSWin/) {
-        $cc = 'cl -TP';
-    } elsif ($Config{osname} eq 'linux') {
-        $cc = 'g++';
-    } elsif ($Config{osname} eq 'cygwin') {
-        $cc = 'g++';
-    } elsif ($Config{osname} eq 'solaris' or $Config{osname} eq 'SunOS') {
-        if ($Config{cc} eq 'gcc') {
-            $cc = 'g++';
-        } else {
-            $cc = 'CC';
-        }
-    } else {
-        $cc = 'g++';
-    }
-
-    $self->requires_external_bin($cc);;
     $self->xs_files;
 
-    $self->makemaker_args( INC   => '-I. -I/usr/include/boost -I' . catdir($mongo_sdk, 'include') );
-    $self->makemaker_args( CC    => $cc );
-    $self->makemaker_args( XSOPT => ' -C++' );
-    $self->cc_lib_paths(catdir($mongo_sdk, 'lib'));
-    $self->cc_lib_links(qw/mongoclient boost_thread-mt boost_filesystem-mt boost_program_options-mt/);
-
+    $self->makemaker_args( INC   => '-I. ' );
     return;
 }
 

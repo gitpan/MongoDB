@@ -1,10 +1,31 @@
-package MongoDB::Connection;
-our $VERSION = '0.01';
+#
+#  Copyright 2009 10gen, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
 
+package MongoDB::Connection;
 # ABSTRACT: A connection to a Mongo server
 
 use Any::Moose;
+use Digest::MD5;
+use Tie::IxHash;
 
+=attr host
+
+Hostname to connect to. Defaults to C<localhost>.
+
+=cut
 
 has host => (
     is       => 'ro',
@@ -13,11 +34,62 @@ has host => (
     default  => 'localhost',
 );
 
+=attr port
+
+Port to use when connecting. Defaults to C<27017>.
+
+=cut
 
 has port => (
     is       => 'ro',
     isa      => 'Int',
     required => 1,
+    default  => 27017,
+);
+
+=attr left_host
+
+Paired connection host to connect to. Can be master or slave.
+
+=cut
+
+has left_host => (
+    is       => 'ro',
+    isa      => 'Str',
+);
+
+=attr left_port
+
+Port to use when connecting to left_host. Defaults to C<27017>.
+
+=cut
+
+has left_port => (
+    is       => 'ro',
+    isa      => 'Int',
+    default  => 27017,
+);
+
+=attr right_host
+
+Paired connection host to connect to. Can be master or slave.
+
+=cut
+
+has right_host => (
+    is       => 'ro',
+    isa      => 'Str',
+);
+
+=attr right_port
+
+Port to use when connecting to right_host. Defaults to C<27017>.
+
+=cut
+
+has right_port => (
+    is       => 'ro',
+    isa      => 'Int',
     default  => 27017,
 );
 
@@ -28,14 +100,26 @@ has _server => (
     builder  => '_build__server',
 );
 
+=attr auto_reconnect
+
+Boolean indicating whether or not to reconnect if the connection is
+interrupted. Defaults to C<1>.
+
+=cut
 
 has auto_reconnect => (
     is       => 'ro',
     isa      => 'Bool',
     required => 1,
-    default  => 0,
+    default  => 1,
 );
 
+=attr auto_connect
+
+Boolean indication whether or not to connect automatically on object
+construction. Defaults to C<1>.
+
+=cut
 
 has auto_connect => (
     is       => 'ro',
@@ -44,26 +128,6 @@ has auto_connect => (
     default  => 1,
 );
 
-has _database_class => (
-    is       => 'ro',
-    isa      => 'Str',
-    required => 1,
-    default  => 'MongoDB::Database',
-);
-
-has _cursor_class => (
-    is       => 'ro',
-    isa      => 'Str',
-    required => 1,
-    default  => 'MongoDB::Cursor',
-);
-
-has _oid_class => (
-    is       => 'ro',
-    isa      => 'Str',
-    required => 1,
-    default  => 'MongoDB::OID',
-);
 
 sub _build__server {
     my ($self) = @_;
@@ -74,17 +138,18 @@ sub _build__server {
 sub BUILD {
     my ($self) = @_;
     eval "use ${_}" # no Any::Moose::load_class becase the namespaces already have symbols from the xs bootstrap
-        for map { $self->$_ } qw/_database_class _cursor_class _oid_class/;
-    $self->_build_xs;
+        for qw/MongoDB::Database MongoDB::Cursor MongoDB::OID/;
     $self->connect if $self->auto_connect;
 }
 
+=method connect
 
-sub connect {
-    my ($self) = @_;
-    $self->_connect;
-    return;
-}
+    $connection->connect;
+
+Connects to the mongo server. Called automatically on object construction if
+C<auto_connect> is true.
+
+=cut
 
 sub find_one {
     my ($self, $ns, $query) = @_;
@@ -93,20 +158,41 @@ sub find_one {
 }
 
 sub query {
-    my ($self, $ns, $query, $limit, $skip) = @_;
-    $query ||= {};
-    $limit ||= 0;
-    $skip  ||= 0;
-    return $self->_query($ns, $query, $limit, $skip);
+    my ($self, $ns, $query, $attrs) = @_;
+    my ($limit, $skip, $sort_by) = @{ $attrs || {} }{qw/limit skip sort_by/};
+    $limit   ||= 0;
+    $skip    ||= 0;
+    return $self->_query($ns, $query, $limit, $skip, $sort_by);
 }
 
 sub insert {
     my ($self, $ns, $object) = @_;
     confess 'not a hash reference' unless ref $object eq 'HASH';
     my %copy = %{ $object }; # a shallow copy is good enough. we won't modify anything deep down in the structure.
-    $copy{_id} = $self->_oid_class->new unless exists $copy{_id};
-    $self->_insert($ns, \%copy);
-    return $copy{_id};
+    $copy{_id} = MongoDB::OID->new unless exists $copy{_id};
+    $self->_insert($ns, [\%copy]);
+    return $copy{'_id'};
+}
+
+sub batch_insert {
+    my ($self, $ns, $object) = @_;
+    confess 'not an array reference' unless ref $object eq 'ARRAY';
+
+    my @copies;
+    my @ids;
+
+    foreach my $obj (@{$object}) {
+        confess 'not a hash reference' unless ref $obj eq 'HASH';
+
+        my %copy = %{ $obj };
+        $copy{'_id'} = MongoDB::OID->new unless exists $copy{'_id'};
+
+        push @copies, \%copy;
+        push @ids, $copy{'_id'};
+    } 
+
+    $self->_insert($ns, \@copies);
+    return @ids;
 }
 
 sub update {
@@ -129,30 +215,69 @@ sub remove {
     );
 
     sub ensure_index {
-        my ($self, $ns, $keys, $direction) = @_;
+        my ($self, $ns, $keys, $direction, $unique) = @_;
         $direction ||= 'ascending';
+        $unique = 0 unless defined $unique;
 
-        my %keys;
-        if (ref $keys eq 'ARRAY') {
-            %keys = map { ($_ => $direction) } @{ $keys };
+        my $k;
+        my @name;
+        if (ref $keys eq 'ARRAY' ||
+            ref $keys eq 'HASH' ) {
+            my %keys;
+            if (ref $keys eq 'ARRAY') {
+                %keys = map { ($_ => $direction) } @{ $keys };
+            }
+            else {
+                %keys = %{ $keys };
+            }
+
+            $k = { map {
+                my $dir = $keys{$_};
+                confess "unknown direction '${dir}'"
+                    unless exists $direction_map{$dir};
+                ($_ => $direction_map{$dir})
+            } keys %keys };
+
+            while ((my $idx, my $d) = each(%$k)) {
+                push @name, $idx;
+                push @name, $d;
+            }
         }
-        elsif (ref $keys eq 'HASH') {
-            %keys = %{ $keys };
+        elsif (ref $keys eq 'Tie::IxHash') {
+            my @ks = $keys->Keys;
+            my @vs = $keys->Values;
+
+            for (my $i=0; $i<$keys->Length; $i++) {
+                $keys->Replace($i, $direction_map{$vs[$i]});
+            }
+
+            @vs = $keys->Values;
+            for (my $i=0; $i<$keys->Length; $i++) {
+                push @name, $ks[$i];
+                push @name, $vs[$i];
+            }
+            $k = $keys;
         }
         else {
             confess 'expected hash or array reference for keys';
         }
 
-        $self->_ensure_index($ns, { map {
-            my $dir = $keys{$_};
-            confess "unknown direction '${dir}'"
-                unless exists $direction_map{$dir};
-            ($_ => $direction_map{$dir})
-        } keys %keys });
+        my $obj = {"ns" => $ns,
+                   "key" => $k,
+                   "name" => join("_", @name)};
+
+        $self->_ensure_index(substr($ns, 0, index($ns, ".")).".system.indexes", [$obj], $unique);
         return;
     }
 }
 
+=method database_names
+
+    my @dbs = $connection->database_names;
+
+Lists all databases on the mongo server.
+
+=cut
 
 sub database_names {
     my ($self) = @_;
@@ -160,91 +285,61 @@ sub database_names {
     return map { $_->{name} } @{ $ret->{databases} };
 }
 
-
-sub get_database {
-    my ($self, $database_name) = @_;
-    return $self->_database_class->new(
-        _connection => $self,
-        name        => $database_name,
-    );
-}
-
-
-sub authenticate {
-    my ($self, @args) = @_;
-    return $self->_authenticate(@args);
-}
-
-no Any::Moose;
-__PACKAGE__->meta->make_immutable;
-
-1;
-
-__END__
-=head1 NAME
-
-MongoDB::Connection - A connection to a Mongo server
-
-=head1 VERSION
-
-version 0.01
-
-=head1 ATTRIBUTES
-
-=head2 host
-
-Hostname to connect to. Defaults to C<loalhost>.
-
-
-
-=head2 port
-
-Port to use when connecting. Defaults to C<27017>.
-
-
-
-=head2 auto_reconnect
-
-Boolean indicating whether or not to reconnect if the connection is
-interrupted. Defaults to C<0>.
-
-
-
-=head2 auto_connect
-
-Boolean indication whether or not to connect automatically on object
-construction. Defaults to C<1>.
-
-
-
-=head1 METHODS
-
-=head2 connect
-
-    $connection->connect;
-
-Connects to the mongo server. Called automatically on object construction if
-C<auto_connect> is true.
-
-
-
-=head2 database_names
-
-    my @dbs = $connection->database_names;
-
-Lists all databases on the mongo server.
-
-
-
-=head2 get_database ($name)
+=method get_database ($name)
 
     my $database = $connection->get_database('foo');
 
 Returns a C<MongoDB::Database> instance for database with the given C<$name>.
 
+=cut
 
+sub get_database {
+    my ($self, $database_name) = @_;
+    return MongoDB::Database->new(
+        _connection => $self,
+        name        => $database_name,
+    );
+}
 
-=head2 authenticate ($dbname, $username, $password, $is_digest?)
+=method find_master
+
+    $connection->find_master
+
+Determines which host of a paired connection is master.  Does nothing for
+a non-paired connection.  Called automatically by internal functions.
+
+=cut
+
+sub find_master {
+    my ($self) = @_;
+    return unless defined $self->left_host && $self->right_host;
+    my ($left, $right, $master);
+
+    eval {
+        $left = MongoDB::Connection->new("host" => $self->left_host, "port" => $self->left_port);
+    };
+    if (!($@ =~ m/couldn't connect to server/)) {
+        $master = $left->find_one('admin.$cmd', {ismaster => 1});
+        if ($master->{'ismaster'}) {    
+            return 0;
+        }
+    }
+
+    eval {
+        $right = MongoDB::Connection->new("host" => $self->right_host, "port" => $self->right_port);
+    };
+    if (!($@ =~ m/couldn't connect to server/)) {
+        $master = $right->find_one('admin.$cmd', {ismaster => 1});
+        if ($master->{'ismaster'}) {
+            return 1;
+        }
+    }
+
+    # something went wrong
+    return -1;
+}
+
+=method authenticate ($dbname, $username, $password, $is_digest?)
 
     $connection->authenticate('foo', 'username', 'secret');
 
@@ -253,15 +348,35 @@ and C<$password>. Passwords are expected to be cleartext and will be
 automatically hashed before sending over the wire, unless C<$is_digest> is
 true, which will assume you already did the hashing on yourself.
 
-=head1 AUTHOR
+=cut
 
-  Florian Ragwitz <rafl@debian.org>
+sub authenticate {
+    my ($self, $dbname, $username, $password, $is_digest) = @_;
+    my $hash = $password;
+    if (!$is_digest) {
+        $hash = Digest::MD5::md5_hex("${username}:mongo:${password}");
+    }
 
-=head1 COPYRIGHT AND LICENSE
+    my $db = $self->get_database($dbname);
+    my $result = $db->run_command({getnonce => 1});
+    if (!$result->{'ok'}) {
+        return $result;
+    }
 
-This software is Copyright (c) 2009 by 10Gen.
+    my $nonce = $result->{'nonce'};
+    my $digest = Digest::MD5::md5_hex($nonce.$username.$hash);
 
-This is free software, licensed under:
+    my $login = tie(my %hash, 'Tie::IxHash');
+    %hash = (authenticate => 1,
+             user => $username, 
+             nonce => $nonce,
+             key => $digest);
+    $result = $db->run_command($login);
 
-  The Apache License, Version 2.0, January 2004
+    return $result;
+}
 
+no Any::Moose;
+__PACKAGE__->meta->make_immutable;
+
+1;

@@ -4,6 +4,9 @@ use lib 'ext';
 use inc::Module::Install;
 
 name 'MongoDB';
+perl_version '5.8.0';
+author 'Kristina Chodorow <kristina@cpan.org>';
+license 'Apache';
 all_from 'lib/MongoDB.pm';
 
 requires 'Any::Moose';
@@ -11,20 +14,20 @@ requires 'Any::Moose';
 # to use Mouse instead of Moose. We depend on it anyway to make sure it's there
 # when it's needed.
 requires 'Class::Method::Modifiers';
+requires 'Digest::MD5';
+requires 'Tie::IxHash';
+requires 'XSLoader';
 test_requires 'Test::Exception';
 
-mongo($ENV{MONGO_SDK});
+mongo;
 
 no_index directory => 'ext';
 
-license 'apache';
 repository 'git://github.com/mongodb/mongo-perl-driver.git';
 
 WriteAll;
 
 package MY;
-our $VERSION = '0.01';
-
 
 use Config;
 

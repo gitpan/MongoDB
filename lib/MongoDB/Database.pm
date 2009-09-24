@@ -1,17 +1,37 @@
-package MongoDB::Database;
-our $VERSION = '0.01';
+#
+#  Copyright 2009 10gen, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
 
+package MongoDB::Database;
 # ABSTRACT: A Mongo Database
 
 use Any::Moose;
+use MongoDB::GridFS;
 
 has _connection => (
     is       => 'ro',
     isa      => 'MongoDB::Connection',
     required => 1,
-    handles  => [qw/query find_one insert update remove ensure_index/],
+    handles  => [qw/query find_one insert update remove ensure_index batch_insert/],
 );
 
+=attr name
+
+The name of the database.
+
+=cut
 
 has name => (
     is       => 'ro',
@@ -19,19 +39,13 @@ has name => (
     required => 1,
 );
 
-has _collection_class => (
-    is       => 'ro',
-    isa      => 'Str',
-    required => 1,
-    default  => 'MongoDB::Collection',
-);
 
 sub BUILD {
     my ($self) = @_;
-    Any::Moose::load_class($self->_collection_class);
+    Any::Moose::load_class("MongoDB::Collection");
 }
 
-around qw/query find_one insert update remove ensure_index/ => sub {
+around qw/query find_one insert update remove ensure_index batch_insert/ => sub {
     my ($next, $self, $ns, @args) = @_;
     return $self->$next($self->_query_ns($ns), @args);
 };
@@ -42,24 +56,69 @@ sub _query_ns {
     return qq{${name}.${ns}};
 }
 
+=method collection_names
+
+    my @collections = $database->collection_names;
+
+Returns the list of collections in this database.
+
+=cut
 
 sub collection_names {
     my ($self) = @_;
-    my $it = $self->query('system.namespaces', {}, 0, 0);
+    my $it = $self->query('system.namespaces', {});
     return map {
         substr($_, length($self->name) + 1)
     } map { $_->{name} } $it->all;
 }
 
+=method get_collection ($name)
+
+    my $collection = $database->get_collection('foo');
+
+Returns a C<MongoDB::Collection> for the collection called C<$name> within this
+database.
+
+=cut
 
 sub get_collection {
     my ($self, $collection_name) = @_;
-    return $self->_collection_class->new(
+    return MongoDB::Collection->new(
         _database => $self,
         name      => $collection_name,
     );
 }
 
+=method get_gridfs ($prefix)
+
+    my $grid = $database->get_gridfs;
+
+Returns a C<MongoDB::GridFS> for storing and retrieving files from the database.
+Default prefix is "fs".
+
+=cut
+
+sub get_gridfs {
+    my ($self, $prefix) = @_;
+    $prefix = "fs" unless $prefix;
+
+    my $files = $self->get_collection("${prefix}.files");
+    my $chunks = $self->get_collection("${prefix}.chunks");
+
+    return MongoDB::GridFS->new(
+        _database => $self,
+        files => $files,
+        chunks => $chunks,
+    );
+}
+
+=method drop
+
+    $database->drop;
+
+Deletes the database.
+
+=cut
 
 sub drop {
     my ($self) = @_;
@@ -67,63 +126,23 @@ sub drop {
 }
 
 
-sub run_command {
-    my ($self, $command) = @_;
-    my $obj = $self->find_one('$cmd', $command);
-    return $obj if $obj->{ok};
-    confess $obj->{errmsg};
+=method last_error
+
+    my $err = $db->last_error;
+
+Queries the database to check if the last operation caused an error.
+
+=cut
+
+sub last_error {
+    my ($self) = @_;
+    return $self->run_command({
+        "getlasterror" => 1
+    });
 }
 
-no Any::Moose;
-__PACKAGE__->meta->make_immutable;
 
-1;
-
-__END__
-=head1 NAME
-
-MongoDB::Database - A Mongo Database
-
-=head1 VERSION
-
-version 0.01
-
-=head1 ATTRIBUTES
-
-=head2 name
-
-The name of the database.
-
-
-
-=head1 METHODS
-
-=head2 collection_names
-
-    my @collections = $database->collection_names;
-
-Returns the list of collections in this database.
-
-
-
-=head2 get_collection ($name)
-
-    my $collection = $database->get_collection('foo');
-
-Returns a C<MongoDB::Collection> for the collection called C<$name> within this
-database.
-
-
-
-=head2 drop
-
-    $database->drop;
-
-Deletes the database.
-
-
-
-=head2 run_command ($command)
+=method run_command ($command)
 
     my $result = $database->run_command({ some_command => 1 });
 
@@ -131,15 +150,46 @@ Runs a command for this database on the mongo server. Throws an exception with
 an error message if the command fails. Returns the result of the command on
 success.
 
-=head1 AUTHOR
+=cut
 
-  Florian Ragwitz <rafl@debian.org>
+sub run_command {
+    my ($self, $command) = @_;
+    my $obj = $self->find_one('$cmd', $command);
+    return $obj if $obj->{ok};
+    $obj->{'errmsg'};
+}
 
-=head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2009 by 10Gen.
+=method eval ($code, $args)
 
-This is free software, licensed under:
+    my $result = $database->eval('function(x) { return "hello, "+x; }', ["world"]);
 
-  The Apache License, Version 2.0, January 2004
+Evaluate a JavaScript expression on the Mongo server. 
 
+Useful if you need to touch a lot of data lightly; in such a scenario 
+the network transfer of the data could be a bottleneck. The $code 
+argument must be a JavaScript function. $args is an array of 
+parameters that will be passed to the function.
+
+=cut
+
+sub eval {
+    my ($self, $code, $args) = @_;
+
+    my $cmd = tie(my %hash, 'Tie::IxHash');
+    %hash = ('$eval' => $code,
+             'args' => $args);
+
+    my $result = $self->run_command($cmd);
+    if (ref $result eq 'HASH' && exists $result->{'retval'}) {
+        return $result->{'retval'};
+    }
+    else {
+        return $result;
+    }
+}
+
+no Any::Moose;
+__PACKAGE__->meta->make_immutable;
+
+1;

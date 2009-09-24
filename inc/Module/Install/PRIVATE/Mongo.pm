@@ -10,7 +10,7 @@ use File::Spec::Functions qw/catdir/;
 
 use vars qw{$VERSION @ISA};
 BEGIN {
-    $VERSION = '0.01';
+    $VERSION = '0.22';
     @ISA     = qw{Module::Install::Base};
 }
 
@@ -25,7 +25,6 @@ sub mongo {
     $self->xs_files;
 
     $self->makemaker_args( INC   => '-I. ' );
-    $self->makemaker_args( CCFLAGS => ' -DDEBUG_LEAKING_SCALARS -DDEBUGGING ');
     return;
 }
 

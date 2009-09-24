@@ -15,6 +15,8 @@
 #
 
 package MongoDB::GridFS;
+our $VERSION = '0.22';
+
 # ABSTRACT: A file storage utility
 
 use Any::Moose;

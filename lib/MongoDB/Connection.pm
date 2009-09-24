@@ -15,8 +15,11 @@
 #
 
 package MongoDB::Connection;
+our $VERSION = '0.22';
+
 # ABSTRACT: A connection to a Mongo server
 
+use MongoDB;
 use Any::Moose;
 use Digest::MD5;
 use Tie::IxHash;

@@ -34,7 +34,7 @@ t/db.t
 t/gridfs.t
 t/img.png
 t/input.txt
-t/oid.t
+t/types.t
 t/performance.pl
 t/temp
 t/temp.txt

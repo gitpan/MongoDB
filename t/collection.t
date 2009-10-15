@@ -1,8 +1,9 @@
 use strict;
 use warnings;
-use Test::More tests => 50;
+use Test::More tests => 81;
 use Test::Exception;
 
+use Data::Types qw(:float);
 use Tie::IxHash;
 
 use MongoDB;
@@ -16,7 +17,23 @@ is($coll->name, 'test_collection', 'get name');
 
 $db->drop;
 
-my $id = $coll->insert({ just => 'another', perl => 'hacker' });
+# very small insert
+my $id = $coll->insert({_id => 1});
+is($id, 1);
+my $tiny = $coll->find_one;
+is($tiny->{'_id'}, 1);
+
+$coll->remove;
+
+$id = $coll->insert({});
+isa_ok($id, 'MongoDB::OID');
+$tiny = $coll->find_one;
+is($tiny->{'_id'}, $id);
+
+$coll->remove;
+
+# insert
+$id = $coll->insert({ just => 'another', perl => 'hacker' });
 is($coll->count, 1, 'count');
 
 $coll->update({ _id => $id }, {
@@ -96,6 +113,15 @@ ok($id = $coll->insert({ data => 'pi', pi => $pi }), "inserting float number val
 ok($obj = $coll->find_one({ data => 'pi' }));
 is($obj->{pi}, $pi);
 
+$coll->drop;
+my $object = {};
+$object->{'autoPartNum'} = '123456';
+$object->{'price'} = 123.19;
+$coll->insert($object);
+my $auto = $coll->find_one;
+ok(is_float($auto->{'price'}));
+is($auto->{'price'}, $object->{'price'});
+
 # test undefined values
 ok($id  = $coll->insert({ data => 'null', none => undef }), 'inserting undefined data');
 ok($obj = $coll->find_one({ data => 'null' }), 'finding undefined row');
@@ -156,6 +182,74 @@ my $yer = $coll->find_one({}, {'y' => 1});
 ok(exists $yer->{'y'}, 'y exists');
 ok(!exists $yer->{'x'}, 'x doesn\'t');
 ok(!exists $yer->{'z'}, 'z doesn\'t');
+
+$coll->drop;
+$coll->batch_insert([{"x" => 1}, {"x" => 1}, {"x" => 1}]);
+$coll->remove({"x" => 1}, 1);
+is ($coll->count, 2, 'remove just one');
+
+# tie::ixhash for update/insert
+$coll->drop;
+my $hash = Tie::IxHash->new("f" => 1, "s" => 2, "fo" => 4, "t" => 3);
+$id = $coll->insert($hash);
+isa_ok($id, 'MongoDB::OID');
+my $tied = $coll->find_one;
+is($tied->{'_id'}."", "$id");
+is($tied->{'f'}, 1);
+is($tied->{'s'}, 2);
+is($tied->{'fo'}, 4);
+is($tied->{'t'}, 3);
+
+my $criteria = Tie::IxHash->new("_id" => $id);
+$hash->Push("something" => "else");
+$coll->update($criteria, $hash);
+$tied = $coll->find_one;
+is($tied->{'f'}, 1);
+is($tied->{'something'}, 'else');
+
+
+# () update/insert
+$coll->drop;
+my @h = ("f" => 1, "s" => 2, "fo" => 4, "t" => 3);
+$id = $coll->insert(\@h);
+isa_ok($id, 'MongoDB::OID');
+$tied = $coll->find_one;
+is($tied->{'_id'}."", "$id");
+is($tied->{'f'}, 1);
+is($tied->{'s'}, 2);
+is($tied->{'fo'}, 4);
+is($tied->{'t'}, 3);
+
+my @criteria = ("_id" => $id);
+my @newobj = ('$inc' => {"f" => 1});
+$coll->update(\@criteria, \@newobj);
+$tied = $coll->find_one;
+is($tied->{'f'}, 2);
+
+$coll->drop;
+
+# test uninitialised array elements
+my @g = ();
+$g[1] = 'foo';
+ok($id = $coll->insert({ data => \@g }));
+ok($obj = $coll->find_one());
+is_deeply($obj->{data}, [undef, 'foo']);
+
+$coll->drop;
+
+# test PVNV with was float, now string
+my $val = 1.5;
+$val = 'foo';
+ok($id => $coll->insert({ data => $val }));
+ok($obj = $coll->find_one({ data => $val }));
+is($obj->{data}, 'foo');
+
+# was string, now float
+my $f = 'abc';
+$f = 3.3;
+ok($id => $coll->insert({ data => $f }));
+ok($obj = $coll->find_one({ data => $f }));
+is($obj->{data}, 3.3);
 
 END {
     $db->drop;

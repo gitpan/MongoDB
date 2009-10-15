@@ -15,14 +15,17 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 # ABSTRACT: A connection to a Mongo server
 
 use MongoDB;
+use MongoDB::Cursor;
+
 use Any::Moose;
 use Digest::MD5;
 use Tie::IxHash;
+use boolean;
 
 =head1 NAME
 
@@ -30,7 +33,31 @@ MongoDB::Connection - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.23
+version 0.24
+
+=head1 SYNOPSIS
+
+The MongoDB::Connection class creates a connection to 
+the MongoDB server. 
+
+By default, it connects to a single server running on
+the local machine listening on the default port:
+
+    # connects to localhost:27017
+    my $connection = MongoDB::Connection->new;
+
+It can connect to a database server running anywhere, 
+though:
+
+    my $connection = MongoDB::Connection->new(host => 'example.com', port => 12345);
+
+It can also be used to connect to a replication pair
+of database servers:
+
+    my $connection = MongoDB::Connection->new(left_host => '192.0.2.0', right_host => '192.0.2.1');
+
+If ports aren't given, they default to C<27017>.
+
 
 =head1 ATTRIBUTES
 
@@ -178,37 +205,35 @@ sub query {
     my ($limit, $skip, $sort_by) = @{ $attrs || {} }{qw/limit skip sort_by/};
     $limit   ||= 0;
     $skip    ||= 0;
-    return $self->_query($ns, $query, $limit, $skip, $sort_by);
+
+    my $q = {};
+    $q->{'query'} = $query ? $query : {};
+
+    if ($sort_by) {
+	$q->{'orderby'} = $sort_by;
+    }
+
+    my $cursor = MongoDB::Cursor->new(
+	_connection => $self,
+	_ns => $ns, 
+	_query => $q, 
+	_limit => $limit, 
+	_skip => $skip
+    );
+    $cursor->_init;
+    return $cursor;
 }
 
 sub insert {
     my ($self, $ns, $object) = @_;
-    confess 'not a hash reference' unless ref $object eq 'HASH';
-    my %copy = %{ $object }; # a shallow copy is good enough. we won't modify anything deep down in the structure.
-    $copy{_id} = MongoDB::OID->new unless exists $copy{_id};
-    $self->_insert($ns, [\%copy]);
-    return $copy{'_id'};
+    my $id = $self->_insert($ns, [$object]);
+    return @$id[0];
 }
 
 sub batch_insert {
     my ($self, $ns, $object) = @_;
     confess 'not an array reference' unless ref $object eq 'ARRAY';
-
-    my @copies;
-    my @ids;
-
-    foreach my $obj (@{$object}) {
-        confess 'not a hash reference' unless ref $obj eq 'HASH';
-
-        my %copy = %{ $obj };
-        $copy{'_id'} = MongoDB::OID->new unless exists $copy{'_id'};
-
-        push @copies, \%copy;
-        push @ids, $copy{'_id'};
-    } 
-
-    $self->_insert($ns, \@copies);
-    return @ids;
+    return $self->_insert($ns, $object);
 }
 
 sub update {
@@ -219,8 +244,10 @@ sub update {
 }
 
 sub remove {
-    my ($self, $ns, $query) = @_;
-    $self->_remove($ns, $query, 0);
+    my ($self, $ns, $query, $just_one) = @_;
+    $query ||= {};
+    $just_one ||= 0;
+    $self->_remove($ns, $query, $just_one);
     return;
 }
 
@@ -280,9 +307,11 @@ sub remove {
 
         my $obj = {"ns" => $ns,
                    "key" => $k,
-                   "name" => join("_", @name)};
+                   "name" => join("_", @name),
+                   "unique" => $unique ? boolean::true : boolean::false};
 
-        $self->_ensure_index(substr($ns, 0, index($ns, ".")).".system.indexes", [$obj], $unique);
+        my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;
+        $self->insert("$db.system.indexes", $obj);
         return;
     }
 }
@@ -319,18 +348,22 @@ sub get_database {
 
 =head2 find_master
 
-    $connection->find_master
+    $master = $connection->find_master
 
 Determines which host of a paired connection is master.  Does nothing for
-a non-paired connection.  Called automatically by internal functions.
+a non-paired connection.  This need never be invoked by a user, it is 
+called automatically by internal functions.  Returns 0 if the left host 
+is master, 1 if the right is, -1 if if cannot be determined.
 
 =cut
 
 sub find_master {
     my ($self) = @_;
+    # return if the connection isn't paired
     return unless defined $self->left_host && $self->right_host;
     my ($left, $right, $master);
 
+    # check the left host
     eval {
         $left = MongoDB::Connection->new("host" => $self->left_host, "port" => $self->left_port);
     };
@@ -341,6 +374,7 @@ sub find_master {
         }
     }
 
+    # check the right_host
     eval {
         $right = MongoDB::Connection->new("host" => $self->right_host, "port" => $self->right_port);
     };
@@ -369,10 +403,13 @@ true, which will assume you already did the hashing on yourself.
 sub authenticate {
     my ($self, $dbname, $username, $password, $is_digest) = @_;
     my $hash = $password;
+
+    # create a hash if the password isn't yet encrypted
     if (!$is_digest) {
         $hash = Digest::MD5::md5_hex("${username}:mongo:${password}");
     }
 
+    # get the nonce
     my $db = $self->get_database($dbname);
     my $result = $db->run_command({getnonce => 1});
     if (!$result->{'ok'}) {
@@ -382,6 +419,7 @@ sub authenticate {
     my $nonce = $result->{'nonce'};
     my $digest = Digest::MD5::md5_hex($nonce.$username.$hash);
 
+    # run the login command
     my $login = tie(my %hash, 'Tie::IxHash');
     %hash = (authenticate => 1,
              user => $username, 
@@ -396,3 +434,7 @@ no Any::Moose;
 __PACKAGE__->meta->make_immutable;
 
 1;
+
+=head1 AUTHOR
+
+  Kristina Chodorow <kristina@mongodb.org>

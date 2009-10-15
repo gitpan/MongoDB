@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 9;
+use Test::More tests => 21;
 use Test::Exception;
 
 use MongoDB;
@@ -17,6 +17,16 @@ my $id = MongoDB::OID->new;
 isa_ok($id, 'MongoDB::OID');
 is($id."", $id->value);
 
+# OIDs created in time-ascending order
+my $ids = [];
+for (0..9) {
+    push @$ids, new MongoDB::OID;
+    sleep 1;
+}
+for (0..8) {
+    ok((@$ids[$_]."") lt (@$ids[$_+1].""));
+}
+
 $coll->insert({'x' => 'FRED', 'y' => 1});
 $coll->insert({'x' => 'bob'});
 $coll->insert({'x' => 'fRed', 'y' => 2});
@@ -29,6 +39,20 @@ ok(!$freds->has_next, 'bob doesn\'t match');
 
 my $fred = $coll->find_one({'x' => qr/^F/});
 is($fred->{'x'}, 'FRED', 'starts with');
+
+# saving/getting regexes
+$coll->drop;
+$coll->insert({"r" => qr/foo/i});
+my $obj = $coll->find_one;
+ok("foo" =~ $obj->{'r'}, 'matches');
+
+SKIP: {
+    skip "regex flags don't work yet with perl 5.8", 1 if $] =~ /5\.008/;
+    ok("FOO" =~ $obj->{'r'}, 'this won\'t pass with Perl 5.8');
+}
+
+ok(!("bar" =~ $obj->{'r'}), 'not a match');
+
 
 # date
 $coll->drop;

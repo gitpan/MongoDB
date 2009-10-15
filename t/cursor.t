@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 49;
+use Test::More tests => 53;
 use Test::Exception;
 
 use MongoDB;
@@ -128,8 +128,8 @@ is($r1->{'sn'}, $r2->{'sn'}, 'reset');
 
 # explain
 my $exp = $cursor->explain;
-is(501, $exp->{'n'}, 'explain');
-is('BasicCursor', $exp->{'cursor'});
+is($exp->{'n'}, 501, 'explain');
+is($exp->{'cursor'}, 'BasicCursor');
 ok(exists $exp->{'endKey'});
 
 $cursor->reset;
@@ -164,3 +164,13 @@ $MongoDB::Cursor::slave_okay = "invalid";
 $cursor = $collection->query->next;
 
 $collection->drop;
+
+# count
+$coll->drop;
+$coll->batch_insert([{'x' => 1}, {'x' => 1}, {'y' => 1}, {'x' => 1, 'z' => 1}]);
+
+is($coll->query->count, 4, 'count');
+is($coll->query({'x' => 1})->count, 3, 'count query');
+is($coll->query->fields({'y' => 1})->count, 1, 'count fields');    
+is($coll->query({'x' => 1})->fields({'z' => 1})->count, 1, 'count fields');
+

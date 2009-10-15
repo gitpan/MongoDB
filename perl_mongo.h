@@ -23,7 +23,22 @@
 #include "perl.h"
 #include "XSUB.h"
 
+
 #define PERL_MONGO_CALL_BOOT(name)  perl_mongo_call_xs (aTHX_ name, cv, mark)
+
+/* take care of big endian machines */
+
+#define SERIALIZE(dest, src, len)               \
+  memcpy(dest, src, len);
+
+#ifndef WIN32
+#  if __BYTE_ORDER == __BIG_ENDIAN
+#    define SERIALIZE(dest, src, len)                \
+  for(i=0; i<len; i++) {                             \
+    dest[i] = src[(len-i)-1];                        \
+  }
+#  endif
+#endif
 
 #define OID_CLASS "MongoDB::OID"
 
@@ -84,12 +99,12 @@ void perl_mongo_oid_create(char* twelve, char *twenty4);
 
 // serialization
 SV *perl_mongo_bson_to_sv (buffer *buf);
-void perl_mongo_sv_to_bson (buffer *buf, SV *sv, int add_oid);
+void perl_mongo_sv_to_bson (buffer *buf, SV *sv, AV *ids);
 
 void perl_mongo_serialize_size(char*, buffer*);
 void perl_mongo_serialize_double(buffer*, double);
 void perl_mongo_serialize_string(buffer*, const char*, int);
-void perl_mongo_serialize_long(buffer*, long long);
+void perl_mongo_serialize_long(buffer*, int64_t);
 void perl_mongo_serialize_int(buffer*, int);
 void perl_mongo_serialize_byte(buffer*, char);
 void perl_mongo_serialize_bytes(buffer*, const char*, int);

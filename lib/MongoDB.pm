@@ -20,7 +20,7 @@ use warnings;
 package MongoDB;
 # ABSTRACT: A Mongo Driver for Perl
 
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 
 use XSLoader;
@@ -36,13 +36,13 @@ MongoDB - A Mongo Driver for Perl
 
 =head1 VERSION
 
-version 0.23
+version 0.24
 
 =head1 SYNOPSIS
 
     use MongoDB;
 
-    my $connection = MongoDB::Connection->new(host => 'localhost, port => 27017);
+    my $connection = MongoDB::Connection->new(host => 'localhost', port => 27017);
     my $database   = $connection->get_database('foo');
     my $collection = $database->get_collection('bar');
     my $id         = $collection->insert({ some => 'data' });
@@ -51,7 +51,7 @@ version 0.23
 =head1 AUTHOR
 
   Florian Ragwitz <rafl@debian.org>
-  Kristina Chodorow <kristina@10gen.com>
+  Kristina Chodorow <kristina@mongodb.org>
 
 =head1 COPYRIGHT AND LICENSE
 

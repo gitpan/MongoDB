@@ -15,7 +15,7 @@
 #
 
 package MongoDB::GridFS;
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 # ABSTRACT: A file storage utility
 
@@ -28,7 +28,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version 0.23
+version 0.24
 
 =head1 SYNOPSIS
 
@@ -101,23 +101,30 @@ sub find_one {
     return MongoDB::GridFS::File->new({_grid => $self,info => $file});
 }
 
-=head2 remove ($criteria)
+=head2 remove ($criteria, $just_one)
 
     $grid->remove({"filename" => "foo.txt"});
 
-Cleanly removes a file from the database.
+Cleanly removes files from the database.  If C<$just_one>
+is given, only one file matching the criteria will be removed.
 
 =cut
 
 sub remove {
-    #TODO: add just_one
-    my ($self, $criteria) = @_;
+    my ($self, $criteria, $just_one) = @_;
 
-    my $cursor = $self->files->query($criteria);
-    while (my $meta = $cursor->next) {
+    if ($just_one) {
+        my $meta = $self->files->find_one($criteria);
         $self->chunks->remove({"files_id" => $meta->{'_id'}});
+        $self->files->remove({"_id" => $meta->{'_id'}});
     }
-    $self->files->remove($criteria);
+    else {
+        my $cursor = $self->files->query($criteria);
+        while (my $meta = $cursor->next) {
+            $self->chunks->remove({"files_id" => $meta->{'_id'}});
+        }
+        $self->files->remove($criteria);
+    }
 }
 
 
@@ -207,3 +214,7 @@ sub all {
 }
 
 1;
+
+=head1 AUTHOR
+
+  Kristina Chodorow <kristina@mongodb.org>

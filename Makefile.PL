@@ -16,8 +16,14 @@ requires 'Any::Moose';
 requires 'Class::Method::Modifiers';
 requires 'Digest::MD5';
 requires 'Tie::IxHash';
+requires 'DateTime';
 requires 'XSLoader';
+requires 'boolean';
 test_requires 'Test::Exception';
+test_requires 'Tie::IxHash';
+test_requires 'DateTime';
+test_requires 'boolean';
+test_requires 'Data::Types';
 
 mongo;
 
@@ -28,7 +34,7 @@ repository 'git://github.com/mongodb/mongo-perl-driver.git';
 WriteAll;
 
 package MY;
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 use Config;
 

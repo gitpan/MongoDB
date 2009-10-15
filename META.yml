@@ -3,8 +3,12 @@ abstract: 'A Mongo Driver for Perl'
 author:
   - 'Kristina Chodorow <kristina@10gen.com>'
 build_requires:
+  Data::Types: 0
+  DateTime: 0
   ExtUtils::MakeMaker: 6.42
   Test::Exception: 0
+  Tie::IxHash: 0
+  boolean: 0
 configure_requires:
   ExtUtils::MakeMaker: 6.42
 distribution_type: module
@@ -22,10 +26,12 @@ no_index:
 requires:
   Any::Moose: 0
   Class::Method::Modifiers: 0
+  DateTime: 0
   Digest::MD5: 0
   Tie::IxHash: 0
   XSLoader: 0
+  boolean: 0
   perl: 5.8.0
 resources:
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.23
+version: 0.24

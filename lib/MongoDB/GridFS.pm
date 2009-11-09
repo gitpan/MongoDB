@@ -15,7 +15,7 @@
 #
 
 package MongoDB::GridFS;
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 # ABSTRACT: A file storage utility
 
@@ -28,7 +28,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version 0.24
+version 0.25
 
 =head1 SYNOPSIS
 
@@ -85,7 +85,7 @@ has chunks => (
 
 =head1 METHODS
 
-=head2 find_one ($criteria, $fields)
+=head2 find_one ($criteria?, $fields?)
 
     my $file = $grid->find_one({"filename" => "foo.txt"});
 
@@ -101,7 +101,7 @@ sub find_one {
     return MongoDB::GridFS::File->new({_grid => $self,info => $file});
 }
 
-=head2 remove ($criteria, $just_one)
+=head2 remove ($criteria?, $just_one?)
 
     $grid->remove({"filename" => "foo.txt"});
 
@@ -128,7 +128,7 @@ sub remove {
 }
 
 
-=head2 insert ($fh, $metadata)
+=head2 insert ($fh, $metadata?)
 
     my $id = $gridfs->insert($fh, {"content-type" => "text/html"});
 

@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Collection;
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 # ABSTRACT: A Mongo Collection
 
@@ -25,7 +25,7 @@ MongoDB::Collection - A Mongo Collection
 
 =head1 VERSION
 
-version 0.24
+version 0.25
 
 =cut
 
@@ -88,7 +88,9 @@ sub _build_full_name {
     );
 
 Executes the given C<$query> and returns a C<MongoDB::Cursor> with the results.
-A hash reference of attributes may be passed as the second argument.
+C<$query> can be a hash reference, L<Tie::IxHash>, or array reference (with an
+even number of elements).  A hash reference of attributes may be passed as the 
+second argument.
 
 Valid query attributes are:
 
@@ -113,6 +115,8 @@ Order results.
     my $object = $collection->find_one({ name => 'Resi' });
 
 Executes the given C<$query> and returns the first object matching it.
+C<$query> can be a hash reference, L<Tie::IxHash>, or array reference (with an
+even number of elements).  
 
 =head2 insert ($object)
 
@@ -120,8 +124,8 @@ Executes the given C<$query> and returns the first object matching it.
 
 Inserts the given C<$object> into the database and returns it's id
 value. C<$object> can be a hash reference, a reference to an array with an
-even number of elements, or a C<Tie::IxHash>.  The id is the C<_id> value 
-specified in the data or a C<MongoDB::OID>.
+even number of elements, or a L<Tie::IxHash>.  The id is the C<_id> value 
+specified in the data or a L<MongoDB::OID>.
 
 =head2 batch_insert (@array)
 
@@ -130,13 +134,25 @@ specified in the data or a C<MongoDB::OID>.
 Inserts each of the documents in the array into the database and returns an
 array of their _id fields.
 
-=head2 update (\%update, \%object, $upsert?)
+=head2 update (\%criteria, \%object, \%options?)
 
-    $collection->update($object);
+    $collection->update({'x' => 3}, {'$inc' => {'count' => -1}, {"upsert" => 1, "multiple" => 1});
 
-Updates an existing C<$object> matching C<$criteria> in the database. If
-C<$upsert> is true, if no object matching C<$criteria> is found, C<$object>
-will be inserted.
+Updates an existing C<$object> matching C<$criteria> in the database. 
+
+C<update> can take a hash reference of options.  The options 
+currently supported are:
+
+=over 
+
+=item C<upsert> 
+If no object matching C<$criteria> is found, C<$object> will be inserted.
+
+=item C<multiple>
+All of the documents that match C<$criteria> will be updated, not just 
+the first document found.
+
+=back
 
 =head2 remove (\%query?, $just_one?)
 
@@ -167,28 +183,24 @@ sub _query_ns {
     return $self->name;
 }
 
-=head2 count ($query, $fields)
+=head2 count ($query?)
 
     my $n_objects = $collection->count({ name => 'Bob' });
-    $bobs_with_zip = $collection->count({ name => 'Bob' }, { zip : 1 });
 
-Counts the number of objects in this collection that match the given C<$query>
-and contain the given C<$fields>. Both parameters are optional, if neither are 
-given, the total number of objects in the collection are returned.
+Counts the number of objects in this collection that match the given C<$query>. 
+If no query is given, the total number of objects in the collection is returned.
 
 =cut
 
 sub count {
-    my ($self, $query, $fields) = @_;
+    my ($self, $query) = @_;
     $query ||= {};
-    $fields ||= {};
 
     my $obj;
     eval {
         $obj = $self->_database->run_command({
             count => $self->name,
             query => $query,
-            fields => $fields,
         });
     };
 

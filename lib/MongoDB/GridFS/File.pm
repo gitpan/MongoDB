@@ -15,7 +15,7 @@
 #
 
 package MongoDB::GridFS::File;
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 # ABSTRACT: A Mongo GridFS file
 
@@ -28,7 +28,7 @@ MongoDB::GridFS::File - A Mongo GridFS file
 
 =head1 VERSION
 
-version 0.24
+version 0.25
 
 =head1 SYNOPSIS
 
@@ -62,7 +62,7 @@ has info => (
 
 =head1 METHODS
 
-=head2 print ($fh, $length, $offset)
+=head2 print ($fh, $length?, $offset?)
 
     $written = $file->print($fh, 50, 200);
 

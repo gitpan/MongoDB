@@ -15,10 +15,9 @@
 #
 
 package MongoDB::Cursor;
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 # ABSTRACT: A cursor/iterator for Mongo query results
-use Data::Dumper;
 use Any::Moose;
 use boolean;
 
@@ -28,7 +27,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version 0.24
+version 0.25
 
 =head1 SYNOPSIS
 
@@ -133,13 +132,14 @@ sub fields {
     return $self;
 }
 
-=head2 sort (\%order)
+=head2 sort ($order)
 
     # sort by name, descending
     my $sort = {"name" => -1};
     $cursor = $coll->query->sort($sort);
 
-Adds a sort to the query.
+Adds a sort to the query.  Argument is either
+a hash reference or a Tie::IxHash.
 Returns this cursor for chaining operations.
 
 =cut
@@ -149,7 +149,7 @@ sub sort {
     confess "cannot set sort after querying"
 	if $self->started_iterating;
     confess 'not a hash reference' 
-	unless ref $order eq 'HASH';
+	unless ref $order eq 'HASH' || ref $order eq 'Tie::IxHash';
 
     $self->_query->{'orderby'} = $order;
     return $self;
@@ -245,7 +245,7 @@ sub hint {
 This will tell you the type of cursor used, the number of records 
 the DB had to examine as part of this query, the number of records 
 returned by the query, and the time in milliseconds the query took 
-to execute.  Requires C<boolean> package.
+to execute.  Requires L<boolean> package.
 
 =cut
 
@@ -279,8 +279,6 @@ sub count {
     my $cmd = {'count' => $coll};
     $cmd->{'query'} = $self->_query->{'query'}
         if exists $self->_query->{'query'};
-    $cmd->{'fields'} = $self->_fields 
-	if $self->_fields;
 
     my $result = $self->_connection->get_database($db)->run_command($cmd);
 

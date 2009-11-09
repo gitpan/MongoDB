@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 # ABSTRACT: A connection to a Mongo server
 
@@ -33,7 +33,7 @@ MongoDB::Connection - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.24
+version 0.25
 
 =head1 SYNOPSIS
 
@@ -237,9 +237,28 @@ sub batch_insert {
 }
 
 sub update {
-    my ($self, $ns, $query, $object, $upsert) = @_;
-    $upsert = 0 unless defined $upsert;
-    $self->_update($ns, $query, $object, $upsert);
+    my ($self, $ns, $query, $object, $opts) = @_;
+
+    # there used to be one option: upsert=0/1
+    # now there are two, there will probably be
+    # more in the future.  So, to support old code,
+    # passing "1" will still be supported, but not
+    # documentd, so we can phase that out eventually.
+    #
+    # The preferred way of passing options will be a
+    # hash of {optname=>value, ...}
+    my $flags = 0;
+    if ($opts && ref $opts eq 'HASH') {
+        $flags |= $opts->{'upsert'} << 0
+            if exists $opts->{'upsert'};
+        $flags |= $opts->{'multiple'} << 1
+            if exists $opts->{'multiple'};
+    }
+    else {
+        $flags = !(!$opts);
+    }
+
+    $self->_update($ns, $query, $object, $flags);
     return;
 }
 
@@ -352,8 +371,23 @@ sub get_database {
 
 Determines which host of a paired connection is master.  Does nothing for
 a non-paired connection.  This need never be invoked by a user, it is 
-called automatically by internal functions.  Returns 0 if the left host 
-is master, 1 if the right is, -1 if if cannot be determined.
+called automatically by internal functions.  Returns values:
+
+=over
+
+=item 0 
+
+The left host is master
+
+=item 1
+
+The right host is master
+
+=item -1 
+
+Error, master cannot be determined.
+
+=back
 
 =cut
 

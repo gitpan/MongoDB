@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 81;
+use Test::More;
 use Test::Exception;
 
 use Data::Types qw(:float);
@@ -8,8 +8,21 @@ use Tie::IxHash;
 
 use MongoDB;
 
-my $conn = MongoDB::Connection->new;
+my $conn;
+eval {
+    $conn = MongoDB::Connection->new;
+};
+
+if ($@) {
+    plan skip_all => $@;
+}
+else {
+    plan tests => 90;
+}
+
 my $db   = $conn->get_database('test_database');
+$db->drop;
+
 my $coll = $db->get_collection('test_collection');
 isa_ok($coll, 'MongoDB::Collection');
 
@@ -69,7 +82,6 @@ for (my $i=0; $i<10; $i++) {
     $coll->insert({'x' => $i, 'z' => 3, 'w' => 4});
     $coll->insert({'x' => $i, 'y' => 2, 'z' => 3, 'w' => 4});
 }
-is($coll->count({}, {'y' => 1}), 10, 'count fields');
 
 $coll->drop;
 ok(!$coll->get_indexes, 'no indexes yet');
@@ -226,6 +238,46 @@ $coll->update(\@criteria, \@newobj);
 $tied = $coll->find_one;
 is($tied->{'f'}, 2);
 
+# update multiple
+$coll->drop;
+$coll->insert({"x" => 1});
+$coll->insert({"x" => 1});
+
+$coll->insert({"x" => 2, "y" => 3});
+$coll->insert({"x" => 2, "y" => 4});
+
+$coll->update({"x" => 1}, {'$set' => {'x' => "hi"}});
+# make sure one is set, one is not
+ok($coll->find_one({"x" => "hi"}));
+ok($coll->find_one({"x" => 1}));
+
+# multiple update
+$coll->update({"x" => 2}, {'$set' => {'x' => 4}}, {'multiple' => 1});
+is($coll->count({"x" => 4}), 2);
+
+$cursor = $coll->query({"x" => 4})->sort({"y" => 1});
+
+$obj = $cursor->next();
+is($obj->{'y'}, 3);
+$obj = $cursor->next();
+is($obj->{'y'}, 4);
+
+# check with upsert if there are matches
+$coll->update({"x" => 4}, {'$set' => {"x" => 3}}, {'multiple' => 1, 'upsert' => 1}); 
+is($coll->count({"x" => 3}), 2);
+
+$cursor = $coll->query({"x" => 3})->sort({"y" => 1});
+
+$obj = $cursor->next();
+is($obj->{'y'}, 3);
+$obj = $cursor->next();
+is($obj->{'y'}, 4);
+
+# check with upsert if there are no matches
+$coll->update({"x" => 15}, {'$set' => {"z" => 4}}, {'upsert' => 1, 'multiple' => 1});
+ok($coll->find_one({"z" => 4}));
+
+is($coll->count(), 5);
 $coll->drop;
 
 # test uninitialised array elements
@@ -251,6 +303,4 @@ ok($id => $coll->insert({ data => $f }));
 ok($obj = $coll->find_one({ data => $f }));
 is($obj->{data}, 3.3);
 
-END {
-    $db->drop;
-}
+

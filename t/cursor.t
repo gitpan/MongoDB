@@ -1,11 +1,23 @@
 use strict;
 use warnings;
-use Test::More tests => 53;
+use Test::More;
 use Test::Exception;
+use Tie::IxHash;
 
 use MongoDB;
 
-my $conn = MongoDB::Connection->new;
+my $conn;
+eval {
+    $conn = MongoDB::Connection->new;
+};
+
+if ($@) {
+    plan skip_all => $@;
+}
+else {
+    plan tests => 54;
+}
+
 my $db = $conn->get_database('test_database');
 $db->drop;
 
@@ -75,6 +87,8 @@ is_deeply([$cursor2->all], [{_id => $id2, x => 5}]);
 
 is_deeply([$coll->query->all], [{_id => $id1, x => 1}, {_id => $id2, x => 5}]);
 
+
+# sort
 my $cursor_sort = $coll->query->sort({'x' => -1});
 is($cursor_sort->has_next, 1);
 is($cursor_sort->next->{'x'}, 5, 'Cursor->sort');
@@ -84,6 +98,16 @@ $cursor_sort = $coll->query->sort({'x' => 1});
 is($cursor_sort->next->{'x'}, 1);
 is($cursor_sort->next->{'x'}, 5);
 
+
+# sort by tie::ixhash
+my $hash = Tie::IxHash->new("x" => -1);
+$cursor_sort = $coll->query->sort($hash);
+is($cursor_sort->has_next, 1);
+is($cursor_sort->next->{'x'}, 5, 'Tie::IxHash cursor->sort');
+is($cursor_sort->next->{'x'}, 1);
+
+
+# snapshot
 my $cursor3 = $coll->query->snapshot;
 is($cursor3->has_next, 1, 'check has_next');
 my $r1 = $cursor3->next;
@@ -171,6 +195,4 @@ $coll->batch_insert([{'x' => 1}, {'x' => 1}, {'y' => 1}, {'x' => 1, 'z' => 1}]);
 
 is($coll->query->count, 4, 'count');
 is($coll->query({'x' => 1})->count, 3, 'count query');
-is($coll->query->fields({'y' => 1})->count, 1, 'count fields');    
-is($coll->query({'x' => 1})->fields({'z' => 1})->count, 1, 'count fields');
 

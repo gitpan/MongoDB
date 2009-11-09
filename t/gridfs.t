@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 39;
+use Test::More;
 use Test::Exception;
 use IO::File;
 
@@ -8,7 +8,18 @@ use MongoDB;
 use MongoDB::GridFS;
 use MongoDB::GridFS::File;
 
-my $m = MongoDB::Connection->new;
+my $m;
+eval {
+    $m = MongoDB::Connection->new;
+};
+
+if ($@) {
+    plan skip_all => $@;
+}
+else {
+    plan tests => 40;
+}
+
 my $db = $m->get_database('foo');
 my $grid = $db->get_gridfs;
 $grid->drop;
@@ -40,10 +51,14 @@ is($chunk->{'files_id'}, $file->{'_id'}, "compare ids");
 
 # test bin insert
 my $img = new IO::File("t/img.png", "r") or die $!;
+# Windows is dumb
+binmode($img);
 $id = $grid->insert($img);
 my $save_id = $id;
 $img->read($dumb_str, 4000000);
 $img->close;
+my $meta = $grid->files->find_one({'_id' => $save_id});
+is($meta->{'length'}, 1292706);
 
 $chunk = $grid->chunks->find_one({'files_id' => $id});
 is(0, $chunk->{'n'});
@@ -91,6 +106,7 @@ is($written, 3);
 # write bindata
 $file = $grid->find_one({'_id' => $save_id});
 $wfh = IO::File->new('t/output.png', '+>') or die $!;
+$wfh->binmode;
 $written = $file->print($wfh);
 is($written, $file->info->{'length'}, 'bin file length');
 

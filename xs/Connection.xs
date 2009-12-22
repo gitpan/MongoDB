@@ -49,7 +49,7 @@ connect (self)
 
                 auto_reconnect_sv = perl_mongo_call_reader (ST(0), "auto_reconnect");
 	CODE:
-	        Newx(link, 1, mongo_link);
+                New(0, link, 1, mongo_link);
 		perl_mongo_attach_ptr_to_instance(self, link);
 
                 link->paired = paired;
@@ -60,19 +60,19 @@ connect (self)
                   int llen = strlen(SvPV_nolen(left_host_sv));
                   int rlen = strlen(SvPV_nolen(right_host_sv));
 
-                  Newxz(link->server.pair.left_host, llen+1, char);
+                  Newz(0, link->server.pair.left_host, llen+1, char);
                   memcpy(link->server.pair.left_host, SvPV_nolen(left_host_sv), llen);
                   link->server.pair.left_port = SvIV(left_port_sv);
                   link->server.pair.left_connected = 0;
 
-                  Newxz(link->server.pair.right_host, rlen+1, char);
+                  Newz(0, link->server.pair.right_host, rlen+1, char);
                   memcpy(link->server.pair.right_host, SvPV_nolen(right_host_sv), rlen);
                   link->server.pair.right_port = SvIV(right_port_sv);
                   link->server.pair.right_connected = 0;
                 }
                 else { 
                   int len = strlen(SvPV_nolen(host_sv));
-                  Newxz(link->server.single.host, len+1, char);
+                  Newz(0, link->server.single.host, len+1, char);
                   memcpy(link->server.single.host, SvPV_nolen(host_sv), len);
                   link->server.single.port = SvIV(port_sv);
                   link->server.single.connected = 0;
@@ -100,83 +100,29 @@ connect (self)
                 SvREFCNT_dec (auto_reconnect_sv);
 
 
-AV*
-_insert (self, ns, object)
-        SV *self
-        const char *ns
-        SV *object
-    PREINIT:
-        mongo_link *link;
-        mongo_msg_header header;
-        buffer buf;
-        int i;
-        AV *a, *ids;
-    INIT:
-        a = (AV*)SvRV(object);
-        ids = newAV();
-    CODE:
-        CREATE_BUF(INITIAL_BUF_SIZE);
-        CREATE_HEADER(buf, ns, OP_INSERT);
-
-        for (i=0; i<=av_len(a); i++) {
-          SV **obj = av_fetch(a, i, 0);
-          perl_mongo_sv_to_bson(&buf, *obj, ids);
-        }
-        perl_mongo_serialize_size(buf.start, &buf);
-
-        // sends
-        mongo_link_say(self, &buf);
-        Safefree(buf.start);
-
-        RETVAL = (AV*)sv_2mortal((SV*)ids);
-    OUTPUT:
-        RETVAL
+int
+send(self, str)
+         SV *self
+         SV *str
+     PREINIT:
+         buffer buf;
+         STRLEN len;
+     INIT:
+         buf.start = SvPV(str,len);
+         buf.pos = buf.start+len;
+         buf.end = buf.start+len;
+     CODE:
+         RETVAL = mongo_link_say(self, &buf);
+     OUTPUT:
+         RETVAL
 
 
 void
-_remove (self, ns, query, just_one)
-        SV *self
-        const char *ns
-        SV *query
-        bool just_one
-    PREINIT:
-        mongo_link *link;
-        mongo_msg_header header;
-        buffer buf;
-    CODE:
-        CREATE_BUF(INITIAL_BUF_SIZE);
-        CREATE_HEADER(buf, ns, OP_DELETE);
-        perl_mongo_serialize_int(&buf, (int)(just_one == 1));
-        perl_mongo_sv_to_bson(&buf, query, NO_PREP);
-        perl_mongo_serialize_size(buf.start, &buf);
-
-        // sends
-        mongo_link_say(self, &buf);
-        Safefree(buf.start);
-
-
-void
-_update (self, ns, query, object, flags)
-        SV *self
-        const char *ns
-        SV *query
-        SV *object
-        int flags
-    PREINIT:
-        mongo_link *link;
-        mongo_msg_header header;
-        buffer buf;
-    CODE:
-        CREATE_BUF(INITIAL_BUF_SIZE);
-        CREATE_HEADER(buf, ns, OP_UPDATE);
-        perl_mongo_serialize_int(&buf, flags);
-        perl_mongo_sv_to_bson(&buf, query, NO_PREP);
-        perl_mongo_sv_to_bson(&buf, object, NO_PREP);
-        perl_mongo_serialize_size(buf.start, &buf);
-
-        // sends
-        mongo_link_say(self, &buf);
-        Safefree(buf.start);
+recv(self, cursor)
+         SV *self
+         SV *cursor
+     CODE:
+         mongo_link_hear(cursor);
 
 
 void
@@ -186,11 +132,25 @@ DESTROY (self)
          mongo_link *link;
      CODE:
          link = (mongo_link*)perl_mongo_get_ptr_from_instance(self);
+
          if (link->paired) {
+#ifdef WIN32
+           closesocket(link->server.pair.left_socket);
+           closesocket(link->server.pair.right_socket);
+#else
+           close(link->server.pair.left_socket);
+           close(link->server.pair.right_socket);
+#endif
            Safefree(link->server.pair.left_host);
            Safefree(link->server.pair.right_host);
          }
          else {
+#ifdef WIN32
+	   closesocket(link->server.single.socket);
+#else
+	   close(link->server.single.socket);
+#endif
            Safefree(link->server.single.host);
          }
+
          Safefree(link);

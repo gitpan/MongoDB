@@ -7,7 +7,11 @@ use MongoDB;
 
 my $conn;
 eval {
-    $conn = MongoDB::Connection->new;
+    my $host = "localhost";
+    if (exists $ENV{MONGOD}) {
+        $host = $ENV{MONGOD};
+    }
+    $conn = MongoDB::Connection->new(host => $host);
 };
 
 if ($@) {
@@ -28,7 +32,7 @@ is($result->{n}, 0, 'last_error2');
 is($result->{err}, undef, 'last_error3');
 
 $result = $db->run_command({forceerror => 1});
-is($result, 'db assertion failure', 'forced error');
+ok($result =~ /asser[st]ion/, 'forced error: '.$result);
 
 $result = $db->last_error;
 is($result->{ok}, 1, 'last_error1');
@@ -40,3 +44,9 @@ is('hello, world', $hello, 'db eval');
 
 my $err = $db->eval('function(x) { xreturn "hello, "+x; }', ["world"]);
 is('compile failed: JS Error: SyntaxError: missing ; before statement nofile_b:0', $err, 'js err');
+
+END {
+    if ($db) {
+        $db->drop;
+    }
+}

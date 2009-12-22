@@ -10,14 +10,18 @@ use MongoDB;
 
 my $conn;
 eval {
-    $conn = MongoDB::Connection->new;
+    my $host = "localhost";
+    if (exists $ENV{MONGOD}) {
+        $host = $ENV{MONGOD};
+    }
+    $conn = MongoDB::Connection->new(host => $host);
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 90;
+    plan tests => 94;
 }
 
 my $db   = $conn->get_database('test_database');
@@ -118,6 +122,28 @@ is_deeply(
 
 $coll->drop;
 ok(!$coll->get_indexes, 'no indexes after dropping');
+
+# make sure this still works
+$coll->ensure_index(["foo"]);
+@indexes = $coll->get_indexes;
+is(scalar @indexes, 2, '1 custom index and the default _id_ index');
+$coll->drop;
+
+# test new form of ensure index
+{
+    $coll->ensure_index({foo => 1, bar => -1, baz => 1});
+    $coll->ensure_index({foo => 1, bar => 1});
+    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
+    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
+    is($coll->count, 2);
+    
+    # unique index
+    $coll->ensure_index({boo => 1}, {unique => 1});
+    $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2});
+    is($coll->count, 2, 'unique index');
+}
+$coll->drop;
+
 
 # test doubles
 my $pi = 3.14159265;
@@ -263,21 +289,28 @@ $obj = $cursor->next();
 is($obj->{'y'}, 4);
 
 # check with upsert if there are matches
-$coll->update({"x" => 4}, {'$set' => {"x" => 3}}, {'multiple' => 1, 'upsert' => 1}); 
-is($coll->count({"x" => 3}), 2);
+SKIP: {
+    my $admin = $conn->get_database('admin');
+    my $buildinfo = $admin->run_command({buildinfo => 1});
+    skip "multiple update won't work with db version $buildinfo->{version}", 5 if $buildinfo->{version} =~ /(0\.\d+\.\d+)|(1\.[12]\d*.\d+)/;
 
-$cursor = $coll->query({"x" => 3})->sort({"y" => 1});
+    $coll->update({"x" => 4}, {'$set' => {"x" => 3}}, {'multiple' => 1, 'upsert' => 1}); 
+    is($coll->count({"x" => 3}), 2);
+    
+    $cursor = $coll->query({"x" => 3})->sort({"y" => 1});
+    
+    $obj = $cursor->next();
+    is($obj->{'y'}, 3);
+    $obj = $cursor->next();
+    is($obj->{'y'}, 4);
+    
+    # check with upsert if there are no matches
+    $coll->update({"x" => 15}, {'$set' => {"z" => 4}}, {'upsert' => 1, 'multiple' => 1});
+    ok($coll->find_one({"z" => 4}));
+    
+    is($coll->count(), 5);
+}
 
-$obj = $cursor->next();
-is($obj->{'y'}, 3);
-$obj = $cursor->next();
-is($obj->{'y'}, 4);
-
-# check with upsert if there are no matches
-$coll->update({"x" => 15}, {'$set' => {"z" => 4}}, {'upsert' => 1, 'multiple' => 1});
-ok($coll->find_one({"z" => 4}));
-
-is($coll->count(), 5);
 $coll->drop;
 
 # test uninitialised array elements
@@ -303,4 +336,23 @@ ok($id => $coll->insert({ data => $f }));
 ok($obj = $coll->find_one({ data => $f }));
 is($obj->{data}, 3.3);
 
+# safe insert
+{
+    $coll->drop;
+    $coll->insert({_id => 1}, {safe => 1});
+    eval {
+        $coll->insert({_id => 1}, {safe => 1});
+    };
+    if ($@) {
+        ok($@ =~ /^E11000/, 'duplicate key exception');
+    }
+    else {
+        ok(0);
+    }
+}
 
+END {
+    if ($db) {
+        $db->drop;
+    }
+}

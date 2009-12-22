@@ -9,14 +9,18 @@ use DateTime;
 
 my $conn;
 eval {
-    $conn = MongoDB::Connection->new;
+    my $host = "localhost";
+    if (exists $ENV{MONGOD}) {
+        $host = $ENV{MONGOD};
+    }
+    $conn = MongoDB::Connection->new(host => $host);
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 21;
+    plan tests => 24;
 }
 
 my $db = $conn->get_database('x');
@@ -37,6 +41,13 @@ for (0..9) {
 for (0..8) {
     ok((@$ids[$_]."") lt (@$ids[$_+1].""));
 }
+
+my $now = DateTime->now;
+$id = MongoDB::OID->new;
+
+is($now->epoch, $id->get_time);
+
+#regexes
 
 $coll->insert({'x' => 'FRED', 'y' => 1});
 $coll->insert({'x' => 'bob'});
@@ -68,7 +79,7 @@ ok(!("bar" =~ $obj->{'r'}), 'not a match');
 # date
 $coll->drop;
 
-my $now = DateTime->now;
+$now = DateTime->now;
 
 $coll->insert({'date' => $now});
 my $date = $coll->find_one;
@@ -83,3 +94,20 @@ $date = $coll->find_one({'date' => $past});
 
 is($date->{'date'}->epoch, 1234567890);
 
+# minkey/maxkey
+$coll->drop;
+
+my $min = bless {}, "MongoDB::MinKey";
+my $max = bless {}, "MongoDB::MaxKey";
+
+$coll->insert({min => $min, max => $max});
+my $x = $coll->find_one;
+
+isa_ok($x->{min}, 'MongoDB::MinKey');
+isa_ok($x->{max}, 'MongoDB::MaxKey');
+
+END {
+    if ($db) {
+        $db->drop;
+    }
+}

@@ -10,7 +10,11 @@ use MongoDB::GridFS::File;
 
 my $m;
 eval {
-    $m = MongoDB::Connection->new;
+    my $host = "localhost";
+    if (exists $ENV{MONGOD}) {
+        $host = $ENV{MONGOD};
+    }
+    $m = MongoDB::Connection->new(host => $host);
 };
 
 if ($@) {
@@ -139,3 +143,9 @@ is($grid->files->count, 1, 'remove just one');
 
 unlink 't/output.txt', 't/output.png', 't/outsub.txt';
 $grid->drop;
+
+END {
+    if ($db) {
+        $db->drop;
+    }
+}

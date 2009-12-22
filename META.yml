@@ -1,5 +1,5 @@
 ---
-abstract: 'A Mongo Driver for Perl'
+abstract: 'Mongo Driver for Perl'
 author:
   - 'Kristina Chodorow <kristina@10gen.com>'
 build_requires:
@@ -34,4 +34,4 @@ requires:
   perl: 5.8.0
 resources:
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.26
+version: 0.27

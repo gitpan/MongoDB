@@ -23,6 +23,8 @@
 
 #include "regcomp.h"
 
+static int isUTF8(const char*, int);
+
 void
 perl_mongo_call_xs (pTHX_ void (*subaddr) (pTHX_ CV *), CV *cv, SV **mark)
 {
@@ -257,7 +259,7 @@ oid_to_sv (buffer *buf)
 {
     char id[25];
     perl_mongo_oid_create(buf->pos, id);
-    return perl_mongo_construct_instance (OID_CLASS, "value", sv_2mortal(newSVpvn (id, 24)), NULL);
+    return perl_mongo_construct_instance ("MongoDB::OID", "value", sv_2mortal(newSVpvn (id, 24)), NULL);
 }
 
 static SV *
@@ -272,12 +274,17 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_DOUBLE: {
-    value = newSVnv(*(double*)buf->pos);
+    void *ptr;
+    int64_t i = *(int64_t*)buf->pos;
+    i = MONGO_64(i);
+    ptr = &i;
+
+    value = newSVnv(*(double*)ptr);
     buf->pos += DOUBLE_64;
     break;
   }
   case BSON_STRING: {
-    int len = *((int*)buf->pos);
+    int len = MONGO_32(*((int*)buf->pos));
     char *str;
     buf->pos += INT_32;
 
@@ -296,7 +303,7 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_BINARY: {
-    int len = *(int*)buf->pos;
+    int len = MONGO_32(*(int*)buf->pos);
     char type, *bytes;
 
     buf->pos += INT_32;
@@ -305,7 +312,7 @@ elem_to_sv (int type, buffer *buf)
     type = *buf->pos++;
 
     if (type == 2) {
-      int len2 = *(int*)buf->pos;
+      int len2 = MONGO_32(*(int*)buf->pos);
       if (len2 == len - 4) {
         len = len2;
         buf->pos += INT_32;
@@ -328,24 +335,23 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_INT: {
-    value = newSViv(*((int*)buf->pos));
+    value = newSViv(MONGO_32(*((int*)buf->pos)));
     buf->pos += INT_32;
     break;
   }
   case BSON_LONG: {
-    value = newSViv(*((int64_t*)buf->pos));
+    value = newSVnv((double)MONGO_64(*((int64_t*)buf->pos)));
     buf->pos += INT_64;
     break;
   }
   case BSON_DATE: {
-    int64_t ms_i = *(int64_t*)buf->pos;
-    SV *datetime, *epoch, *ms;
+    int64_t ms_i = MONGO_64(*(int64_t*)buf->pos);
+    SV *datetime, *ms;
     HV *named_params;
     buf->pos += INT_64;
     ms_i /= 1000;
 
     datetime = sv_2mortal(newSVpv("DateTime", 0));
-    epoch = sv_2mortal(newSVpv("epoch", 0));
     ms = newSViv(ms_i);
 
     named_params = newHV();
@@ -416,18 +422,18 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_TIMESTAMP: {
-    value = newSViv((long)*(int*)buf->pos);
+    value = newSViv(MONGO_64((long)*(int*)buf->pos));
     buf->pos += INT_64;
     break;
   }
   case BSON_MINKEY: {
-    STRLEN len;
-    value = newSVpv("[MinKey]", len);
+    HV *stash = gv_stashpv("MongoDB::MinKey", 0);
+    value = sv_bless(newRV((SV*)newHV()), stash);
     break;
   }
   case BSON_MAXKEY: {
-    STRLEN len;
-    value = newSVpv("[MaxKey]", len);
+    HV *stash = gv_stashpv("MongoDB::MaxKey", 0);
+    value = sv_bless(newRV((SV*)newHV()), stash);
     break;
   }
   default: {
@@ -491,7 +497,7 @@ perl_mongo_bson_to_sv (buffer *buf)
     return newRV_noinc ((SV *)ret);
 }
 
-static int resize_buf(buffer *buf, int size) {
+int perl_mongo_resize_buf(buffer *buf, int size) {
   int total = buf->end - buf->start;
   int used = buf->pos - buf->start;
 
@@ -508,7 +514,7 @@ static int resize_buf(buffer *buf, int size) {
 
 void perl_mongo_serialize_byte(buffer *buf, char b) {
   if(BUF_REMAINING <= 1) {
-    resize_buf(buf, 1);
+    perl_mongo_resize_buf(buf, 1);
   }
   *(buf->pos) = b;
   buf->pos += 1;
@@ -516,7 +522,7 @@ void perl_mongo_serialize_byte(buffer *buf, char b) {
 
 void perl_mongo_serialize_bytes(buffer *buf, const char *str, int str_len) {
   if(BUF_REMAINING <= str_len) {
-    resize_buf(buf, str_len);
+    perl_mongo_resize_buf(buf, str_len);
   }
   memcpy(buf->pos, str, str_len);
   buf->pos += str_len;
@@ -524,7 +530,7 @@ void perl_mongo_serialize_bytes(buffer *buf, const char *str, int str_len) {
 
 void perl_mongo_serialize_string(buffer *buf, const char *str, int str_len) {
   if(BUF_REMAINING <= str_len+1) {
-    resize_buf(buf, str_len+1);
+    perl_mongo_resize_buf(buf, str_len+1);
   }
 
   memcpy(buf->pos, str, str_len);
@@ -534,38 +540,36 @@ void perl_mongo_serialize_string(buffer *buf, const char *str, int str_len) {
 }
 
 void perl_mongo_serialize_int(buffer *buf, int num) {
-  int i;
-  int *ptr = &num;
+  int i = MONGO_32(num);
 
   if(BUF_REMAINING <= INT_32) {
-    resize_buf(buf, INT_32);
+    perl_mongo_resize_buf(buf, INT_32);
   }
 
-  SERIALIZE(buf->pos, ptr, INT_32);
+  memcpy(buf->pos, &i, INT_32);
   buf->pos += INT_32;
 }
 
 void perl_mongo_serialize_long(buffer *buf, int64_t num) {
-  int i;
-  int64_t *ptr = &num;
+  int64_t i = MONGO_64(num);
 
   if(BUF_REMAINING <= INT_64) {
-    resize_buf(buf, INT_64);
+    perl_mongo_resize_buf(buf, INT_64);
   }
 
-  SERIALIZE(buf->pos, ptr, INT_64);
+  memcpy(buf->pos, &i, INT_64);
   buf->pos += INT_64;
 }
 
 void perl_mongo_serialize_double(buffer *buf, double num) {
-  int i;
-  double *ptr = &num;
+  void *ptr = &num;
+  int64_t i = MONGO_64(*(int64_t*)ptr);
 
   if(BUF_REMAINING <= DOUBLE_64) {
-    resize_buf(buf, DOUBLE_64);
+    perl_mongo_resize_buf(buf, DOUBLE_64);
   }
 
-  SERIALIZE(buf->pos, ptr, DOUBLE_64);
+  memcpy(buf->pos, &i, DOUBLE_64);
   buf->pos += DOUBLE_64;
 }
 
@@ -573,19 +577,19 @@ void perl_mongo_serialize_oid(buffer *buf, char *id) {
   int i;
 
   if(BUF_REMAINING <= OID_SIZE) {
-    resize_buf(buf, OID_SIZE);
+    perl_mongo_resize_buf(buf, OID_SIZE);
   }
 
   for(i=0;i<OID_SIZE;i++) {
     char digit1 = id[i*2], digit2 = id[i*2+1];
-    digit1 = digit1 >= 'a' && digit1 <= 'f' ? digit1 -= 87 : digit1;
-    digit1 = digit1 >= 'A' && digit1 <= 'F' ? digit1 -= 55 : digit1;
-    digit1 = digit1 >= '0' && digit1 <= '9' ? digit1 -= 48 : digit1;
-    
-    digit2 = digit2 >= 'a' && digit2 <= 'f' ? digit2 -= 87 : digit2;
-    digit2 = digit2 >= 'A' && digit2 <= 'F' ? digit2 -= 55 : digit2;
-    digit2 = digit2 >= '0' && digit2 <= '9' ? digit2 -= 48 : digit2;
-    
+    digit1 = digit1 >= 'a' && digit1 <= 'f' ? digit1 - 87 : digit1;
+    digit1 = digit1 >= 'A' && digit1 <= 'F' ? digit1 - 55 : digit1;
+    digit1 = digit1 >= '0' && digit1 <= '9' ? digit1 - 48 : digit1;
+
+    digit2 = digit2 >= 'a' && digit2 <= 'f' ? digit2 - 87 : digit2;
+    digit2 = digit2 >= 'A' && digit2 <= 'F' ? digit2 - 55 : digit2;
+    digit2 = digit2 >= '0' && digit2 <= '9' ? digit2 - 48 : digit2;
+
     buf->pos[i] = digit1*16+digit2;
   }
   buf->pos += OID_SIZE;
@@ -608,16 +612,35 @@ void perl_mongo_serialize_bindata(buffer *buf, SV *sv)
   perl_mongo_serialize_bytes(buf, bytes, len);
 }
 
+void perl_mongo_serialize_key(buffer *buf, const char *str, void *prep) {
+  SV *c = get_sv("MongoDB::BSON::char", 0);
+
+  if(BUF_REMAINING <= strlen(str)+1) {
+    perl_mongo_resize_buf(buf, strlen(str)+1);
+  }
+
+  if (c && SvPOK(c) && SvPV_nolen(c)[0] == str[0]) {
+    *(buf->pos) = '$';
+    memcpy(buf->pos+1, str+1, strlen(str)-1);
+  }
+  else {
+    memcpy(buf->pos, str, strlen(str));
+  }
+
+  // add \0 at the end of the string
+  buf->pos[strlen(str)] = 0;
+  buf->pos += strlen(str) + 1;
+}
+
 
 /* the position is not increased, we are just filling
  * in the first 4 bytes with the size.
  */
 void perl_mongo_serialize_size(char *start, buffer *buf) {
-  int i;
   int total = buf->pos - start;
-  int *ptr = &total;
+  total = MONGO_32(total);
 
-  SERIALIZE(start, ptr, INT_32);
+  memcpy(start, &total, INT_32);
 }
 
 static void append_sv (buffer *buf, const char *key, SV *sv, AV *ids);
@@ -625,7 +648,7 @@ static void append_sv (buffer *buf, const char *key, SV *sv, AV *ids);
 /* add an _id */
 static void
 perl_mongo_prep(buffer *buf, AV *ids) {
-  SV *id = perl_mongo_construct_instance (OID_CLASS, NULL);
+  SV *id = perl_mongo_construct_instance ("MongoDB::OID", NULL);
   append_sv(buf, "_id", id, NO_PREP);
   av_push(ids, id);
 }
@@ -688,9 +711,9 @@ av_to_bson (buffer *buf, AV *av)
         SV **sv;
         SV *key = newSViv (i);
         if (!(sv = av_fetch (av, i, 0)))
-            append_sv (buf, SvPVutf8_nolen(key), newSV(0), NO_PREP);
+            append_sv (buf, SvPV_nolen(key), newSV(0), NO_PREP);
         else
-            append_sv (buf, SvPVutf8_nolen(key), *sv, NO_PREP);
+            append_sv (buf, SvPV_nolen(key), *sv, NO_PREP);
 
         SvREFCNT_dec (key);
     }
@@ -746,46 +769,89 @@ ixhash_to_bson(buffer *buf, SV *sv, AV *ids) {
     
     for (i=0; i<=av_len(keys); i++) {
         SV **k, **v;
+        STRLEN len;
+        const char *str;
+
         if (!(k = av_fetch(keys, i, 0)) ||
             !(v = av_fetch(values, i, 0))) {
             croak ("failed to fetch associative array value");
         }
-        append_sv(buf, SvPVutf8_nolen(*k), *v, NO_PREP);
+
+        str = SvPV(*k, len);
+
+        if (isUTF8(str, len)) {
+          str = SvPVutf8(*k, len);
+        }
+
+        append_sv(buf, str, *v, NO_PREP);
     }
 
     perl_mongo_serialize_null(buf);
     perl_mongo_serialize_size(buf->start+start, buf);
 }
 
+static int isUTF8(const char *s, int len) {
+  int i;
+
+  for (i=0; i<len; i++) {
+    if (i+3 < len &&
+        (s[i] & 248) == 240 &&
+        (s[i+1] & 192) == 128 &&
+        (s[i+2] & 192) == 128 &&
+        (s[i+3] & 192) == 128) {
+      i += 3;
+    }
+    else if (i+2 < len && 
+             (s[i] & 240) == 224 &&
+             (s[i+1] & 192) == 128 &&
+             (s[i+2] & 192) == 128) {
+      i += 2;
+    }
+    else if (i+1 < len &&
+             (s[i] & 224) == 192 &&
+             (s[i+2] & 192) == 128) {
+      i += 1;
+    }
+    else if ((s[i] & 128) != 0) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+
 static void
 append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
 {
     if (!SvOK(sv)) {
         set_type(buf, BSON_NULL);
-        perl_mongo_serialize_string(buf, key, strlen(key));
+        perl_mongo_serialize_key(buf, key, ids);
         return;
     }
     if (SvROK (sv)) {
         if (sv_isobject (sv)) {
-            if (sv_derived_from (sv, OID_CLASS)) {
+            /* OIDs */
+            if (sv_derived_from (sv, "MongoDB::OID")) {
                 SV *attr = perl_mongo_call_reader (sv, "value");
                 char *str = SvPV_nolen (attr);
 
                 set_type(buf, BSON_OID);
-                perl_mongo_serialize_string(buf, key, strlen(key));
+                perl_mongo_serialize_key(buf, key, ids);
                 perl_mongo_serialize_oid(buf, str);
 
                 SvREFCNT_dec (attr);
             }
+	    /* Tie::IxHash */
             else if (sv_isa(sv, "Tie::IxHash")) {
               set_type(buf, BSON_OBJECT);
-              perl_mongo_serialize_string(buf, key, strlen(key));
+              perl_mongo_serialize_key(buf, key, ids);
               ixhash_to_bson(buf, sv, NO_PREP);
             }
+	    /* DateTime */
             else if (sv_isa(sv, "DateTime")) {
               SV *sec, *ms;
               set_type(buf, BSON_DATE);
-              perl_mongo_serialize_string(buf, key, strlen(key));
+              perl_mongo_serialize_key(buf, key, ids);
               sec = perl_mongo_call_reader (sv, "epoch");
               ms = perl_mongo_call_method (sv, "millisecond", 0);
 
@@ -794,15 +860,25 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
               SvREFCNT_dec (sec);
               SvREFCNT_dec (ms);
             }
+	    /* boolean */
             else if (sv_isa(sv, "boolean")) {
               set_type(buf, BSON_BOOL);
-              perl_mongo_serialize_string(buf, key, strlen(key));
+              perl_mongo_serialize_key(buf, key, ids);
               perl_mongo_serialize_byte(buf, SvIV(SvRV(sv)));
+            }
+            else if (sv_isa(sv, "MongoDB::MinKey")) {
+              set_type(buf, BSON_MINKEY);
+              perl_mongo_serialize_key(buf, key, ids);
+            }
+            else if (sv_isa(sv, "MongoDB::MaxKey")) {
+              set_type(buf, BSON_MAXKEY);
+              perl_mongo_serialize_key(buf, key, ids);
             }
             else if (SvTYPE(SvRV(sv)) == SVt_PVMG) {
               MAGIC *remg;
 
               if (remg = mg_find((SV*)SvRV(sv), PERL_MAGIC_qr)) {
+		/* regular expression */
                 int f=0, i=0;
                 STRLEN string_length;
                 char flags[] = {0,0,0,0,0,0};
@@ -810,7 +886,7 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
                 REGEXP *re = (REGEXP *) remg->mg_obj;
 
                 set_type(buf, BSON_REGEX);
-                perl_mongo_serialize_string(buf, key, strlen(key));
+                perl_mongo_serialize_key(buf, key, ids);
                 perl_mongo_serialize_string(buf, re->precomp, re->prelen);
 
                 string = SvPV(sv, string_length);
@@ -833,22 +909,25 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
                 
               }
               else {
+		/* binary */
                 set_type(buf, BSON_BINARY);
-                perl_mongo_serialize_string(buf, key, strlen(key));
+                perl_mongo_serialize_key(buf, key, ids);
                 perl_mongo_serialize_bindata(buf, SvRV(sv));
               }
             }
         } else {
             switch (SvTYPE (SvRV (sv))) {
                 case SVt_PVHV:
+                    /* hash */
                     set_type(buf, BSON_OBJECT);
-                    perl_mongo_serialize_string(buf, key, strlen(key));
+                    perl_mongo_serialize_key(buf, key, ids);
                     /* don't add a _id to inner objs */
                     hv_to_bson (buf, sv, NO_PREP);
                     break;
                 case SVt_PVAV:
+                    /* array */
                     set_type(buf, BSON_ARRAY);
-                    perl_mongo_serialize_string(buf, key, strlen(key));
+                    perl_mongo_serialize_key(buf, key, ids);
                     av_to_bson (buf, (AV *)SvRV (sv));
                     break;
                 default:
@@ -858,43 +937,45 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
         }
     } else {
         switch (SvTYPE (sv)) {
-            case SVt_IV: {
-                set_type(buf, BSON_INT);
-                perl_mongo_serialize_string(buf, key, strlen(key));
-                perl_mongo_serialize_int(buf, (int)SvIV (sv));
-                break;
-            }
-            case SVt_PVNV:
-            case SVt_NV: {
+	    /* double */
+            case SVt_NV: 
+            case SVt_PVNV: {
               if (SvNOK(sv)) {
                 set_type(buf, BSON_DOUBLE);
-                perl_mongo_serialize_string(buf, key, strlen(key));
+                perl_mongo_serialize_key(buf, key, ids);
                 perl_mongo_serialize_double(buf, (double)SvNV (sv));
                 break;
               }
             }
+            /* int */
+            case SVt_IV:
             case SVt_PVIV: {
               if (SvIOK(sv)) {
                 set_type(buf, BSON_INT);
-                perl_mongo_serialize_string(buf, key, strlen(key));
+                perl_mongo_serialize_key(buf, key, ids);
                 perl_mongo_serialize_int(buf, (int)SvIV (sv));
                 break;
               }
             }
+	    /* string */
             case SVt_PV:
             case SVt_PVMG:
                 /* Do we need SVt_PVLV here, too? */
                 if (sv_len (sv) != strlen (SvPV_nolen (sv))) {
                     set_type(buf, BSON_BINARY);
-                    perl_mongo_serialize_string(buf, key, strlen(key));
+                    perl_mongo_serialize_key(buf, key, ids);
                     perl_mongo_serialize_bindata(buf, sv);
                 }
                 else {
                     STRLEN len;
-                    const char *str = SvPVutf8(sv, len);
+                    const char *str = SvPV(sv, len);
+
+                    if (!isUTF8(str, len)) {
+                      str = SvPVutf8(sv, len);
+                    }
 
                     set_type(buf, BSON_STRING);
-                    perl_mongo_serialize_string(buf, key, strlen(key));
+                    perl_mongo_serialize_key(buf, key, ids);
                     perl_mongo_serialize_int(buf, len+1);
                     perl_mongo_serialize_string(buf, str, len);
                 }
@@ -966,10 +1047,19 @@ perl_mongo_sv_to_bson (buffer *buf, SV *sv, AV *ids)
 
                 for (i = 0; i <= av_len (av); i += 2) {
                     SV **key, **val;
+                    STRLEN len;
+                    const char *str;
+
                     if ( !((key = av_fetch (av, i, 0)) && (val = av_fetch (av, i + 1, 0))) ) {
                         croak ("failed to fetch array element");
                     }
-                    append_sv (buf, SvPVutf8_nolen (*key), *val, NO_PREP);
+
+                    str = SvPV(*key, len);
+
+                    if (!isUTF8(str, len)) {
+                      str = SvPVutf8(*key, len);
+                    }
+                    append_sv (buf, str, *val, NO_PREP);
                 }
 
                 perl_mongo_serialize_null(buf);

@@ -15,7 +15,7 @@
 #
 
 package MongoDB::OID;
-our $VERSION = '0.26';
+our $VERSION = '0.27';
 # ABSTRACT: A Mongo Object ID
 
 use Any::Moose;
@@ -26,7 +26,7 @@ MongoDB::OID - A Mongo Object ID
 
 =head1 VERSION
 
-version 0.26
+version 0.27
 
 =head1 SYNOPSIS
 
@@ -79,6 +79,27 @@ sub build_value {
 sub to_string {
     my ($self) = @_;
     $self->value;
+}
+
+=head1 METHODS
+
+=head2 get_time
+
+    my $date = DateTime->from_epoch(epoch => $id->get_time);
+
+Each OID contains a 4 bytes timestamp from when it was created.  This method
+extracts the timestamp.  
+
+=cut
+
+sub get_time {
+    my ($self) = @_;
+
+    my $ts = 0;
+    for (my $i = 0; $i<4; $i++) {
+        $ts = ($ts * 256) + hex(substr($self->value, $i*2, 2));
+    }
+    return $ts;
 }
 
 use overload

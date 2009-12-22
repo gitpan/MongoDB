@@ -15,11 +15,12 @@
 #
 
 package MongoDB::Cursor;
-our $VERSION = '0.26';
+our $VERSION = '0.27';
 
 # ABSTRACT: A cursor/iterator for Mongo query results
 use Any::Moose;
 use boolean;
+use Tie::IxHash;
 
 =head1 NAME
 
@@ -27,7 +28,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version 0.26
+version 0.27
 
 =head1 SYNOPSIS
 
@@ -37,6 +38,38 @@ version 0.26
 
     my @objects = $cursor->all;
 
+
+=head1 OPTIONS
+
+The MongoDB::Cursor::Options subpackage defines the actual values for options 
+that can be put on a cursor.
+
+These are used internally by the driver.
+
+=head2 tailable
+
+If a cursor should be tailable.
+
+=head2 slave_okay
+
+If a query can be done on a slave database server.
+
+=head2 immortal
+
+Ordinarily, a cursor "dies" on the database server after a certain length of
+time, to prevent inactive cursors from hogging resources.  This option sets that
+a cursor should never die.
+
+=cut
+
+{
+    package Flags;
+
+    $MongoDB::Cursor::Flags::tailable = 2;
+    $MongoDB::Cursor::Flags::slave_okay = 4;
+    $MongoDB::Cursor::Flags::immortal = 16;
+
+}
 
 =head1 STATIC ATTRIBUTES
 
@@ -81,7 +114,6 @@ has _ns => (
 
 has _query => (
     is => 'rw',
-    isa => 'HashRef',
     required => 1,
 );
 
@@ -106,7 +138,28 @@ has _skip => (
 );
 
 
+# stupid hack for inconsistent database handling of queries
+has _grrrr => (
+    is      => 'rw',
+    isa     => 'Bool',
+    default => 0,
+);
+
+
 =head1 METHODS
+
+=cut
+
+sub _ensure_special {
+    my ($self) = @_;
+
+    if ($self->_grrrr) {
+        return;
+    }
+
+    $self->_grrrr(1);
+    $self->_query({'query' => $self->_query})
+}
 
 =head2 fields (\%f)
 
@@ -151,6 +204,7 @@ sub sort {
     confess 'not a hash reference' 
 	unless ref $order eq 'HASH' || ref $order eq 'Tie::IxHash';
 
+    $self->_ensure_special;
     $self->_query->{'orderby'} = $order;
     return $self;
 }
@@ -215,6 +269,7 @@ sub snapshot {
     confess "cannot set snapshot after querying"
 	if $self->started_iterating;
 
+    $self->_ensure_special;
     $self->_query->{'$snapshot'} = 1;
     return $self;
 }
@@ -234,6 +289,7 @@ sub hint {
     confess 'not a hash reference' 
 	unless ref $index eq 'HASH';
 
+    $self->_ensure_special;
     $self->_query->{'$hint'} = $index;
     return $self;
 }
@@ -256,6 +312,7 @@ sub explain {
         $self->_limit($self->_limit * -1);
     }
 
+    $self->_ensure_special;
     $self->_query->{'$explain'} = boolean::true;
 
     my $retval = $self->reset->next;
@@ -264,31 +321,39 @@ sub explain {
     return $retval;
 }
 
-=head2 count
+=head2 count($all?)
 
     my $num = $cursor->count;
+    my $num = $cursor->skip(20)->count(1);
 
-Returns the number of document this query will return.
+Returns the number of document this query will return.  Optionally takes a
+boolean parameter, indicating that the cursor's limit and skip fields should be 
+used in calculating the count.
 
 =cut
 
 sub count {
-    my ($self) = @_;
+    my ($self, $all) = @_;
 
-    my ($db, $coll) = $self->_ns =~ m/^([^\.]+).(.*)/;
-    my $cmd = {'count' => $coll};
-    $cmd->{'query'} = $self->_query->{'query'}
-        if exists $self->_query->{'query'};
+    my ($db, $coll) = $self->_ns =~ m/^([^\.]+)\.(.*)/;
+    my $cmd = new Tie::IxHash(count => $coll);
+
+    if ($self->_grrrr) {
+        $cmd->Push(query => $self->_query->{'query'});
+    }
+    else {
+        $cmd->Push(query => $self->_query);
+    }
+
+    if ($all) {
+        $cmd->Push(limit => $self->_limit) if $self->_limit;
+        $cmd->Push(skip => $self->_skip) if $self->_skip;
+    }
 
     my $result = $self->_connection->get_database($db)->run_command($cmd);
 
     # returns "ns missing" if collection doesn't exist
     return 0 unless ref $result eq 'HASH';
-
-    if ($self->_limit && $result->{'n'} > $self->_limit) {
-	return $self->_limit;
-    }
-
     return $result->{'n'};
 }
 

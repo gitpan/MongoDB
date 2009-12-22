@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.26';
+our $VERSION = '0.27';
 
 # ABSTRACT: A connection to a Mongo server
 
@@ -33,31 +33,27 @@ MongoDB::Connection - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.26
+version 0.27
 
 =head1 SYNOPSIS
 
-The MongoDB::Connection class creates a connection to 
-the MongoDB server. 
+The MongoDB::Connection class creates a connection to the MongoDB server. 
 
-By default, it connects to a single server running on
-the local machine listening on the default port:
+By default, it connects to a single server running on the local machine 
+listening on the default port:
 
     # connects to localhost:27017
     my $connection = MongoDB::Connection->new;
 
-It can connect to a database server running anywhere, 
-though:
+It can connect to a database server running anywhere, though:
 
     my $connection = MongoDB::Connection->new(host => 'example.com', port => 12345);
 
-It can also be used to connect to a replication pair
-of database servers:
+It can also be used to connect to a replication pair of database servers:
 
     my $connection = MongoDB::Connection->new(left_host => '192.0.2.0', right_host => '192.0.2.1');
 
 If ports aren't given, they default to C<27017>.
-
 
 =head1 ATTRIBUTES
 
@@ -207,10 +203,12 @@ sub query {
     $skip    ||= 0;
 
     my $q = {};
-    $q->{'query'} = $query ? $query : {};
-
     if ($sort_by) {
+        $q->{'query'} = $query;
 	$q->{'orderby'} = $sort_by;
+    }
+    else {
+        $q = $query ? $query : {};
     }
 
     my $cursor = MongoDB::Cursor->new(
@@ -225,15 +223,37 @@ sub query {
 }
 
 sub insert {
-    my ($self, $ns, $object) = @_;
-    my $id = $self->_insert($ns, [$object]);
-    return @$id[0];
+    my ($self, $ns, $object, $options) = @_;
+    my @id = $self->batch_insert($ns, [$object], $options);
+    return $id[0];
 }
 
 sub batch_insert {
-    my ($self, $ns, $object) = @_;
+    my ($self, $ns, $object, $options) = @_;
     confess 'not an array reference' unless ref $object eq 'ARRAY';
-    return $self->_insert($ns, $object);
+
+    my ($insert, $ids) = MongoDB::write_insert($ns, $object);
+
+    if (defined($options) && $options->{safe}) {
+        my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;
+        my ($query, $info) = MongoDB::write_query($db.'.$cmd', 0, 0, -1, {getlasterror => 1});
+
+        $self->send("$insert$query");
+
+        my $cursor = MongoDB::Cursor->new(_ns => $info->{ns}, _connection => $self, _query => {});
+        $cursor->_init;
+        $self->recv($cursor);
+        my $ok = $cursor->next();
+
+        if ($ok->{err}) {
+            confess $ok->{err};
+        }
+    }
+    else {
+        $self->send($insert);
+    }
+
+    return @$ids;
 }
 
 sub update {
@@ -258,7 +278,7 @@ sub update {
         $flags = !(!$opts);
     }
 
-    $self->_update($ns, $query, $object, $flags);
+    $self->send(MongoDB::write_update($ns, $query, $object, $flags));
     return;
 }
 
@@ -266,7 +286,7 @@ sub remove {
     my ($self, $ns, $query, $just_one) = @_;
     $query ||= {};
     $just_one ||= 0;
-    $self->_remove($ns, $query, $just_one);
+    $self->send(MongoDB::write_remove($ns, $query, $just_one));
     return;
 }
 
@@ -276,13 +296,17 @@ sub remove {
         descending => -1,
     );
 
-    sub ensure_index {
+
+    # arg, this is such a mess.  support fade out:
+    #     .27 - support for old & new format
+    #     .28 - support for new format, remove documentation on old format
+    #     .29 - remove old format
+    sub _old_ensure_index {
         my ($self, $ns, $keys, $direction, $unique) = @_;
         $direction ||= 'ascending';
         $unique = 0 unless defined $unique;
 
         my $k;
-        my @name;
         if (ref $keys eq 'ARRAY' ||
             ref $keys eq 'HASH' ) {
             my %keys;
@@ -299,11 +323,6 @@ sub remove {
                     unless exists $direction_map{$dir};
                 ($_ => $direction_map{$dir})
             } keys %keys };
-
-            while ((my $idx, my $d) = each(%$k)) {
-                push @name, $idx;
-                push @name, $d;
-            }
         }
         elsif (ref $keys eq 'Tie::IxHash') {
             my @ks = $keys->Keys;
@@ -313,21 +332,50 @@ sub remove {
                 $keys->Replace($i, $direction_map{$vs[$i]});
             }
 
-            @vs = $keys->Values;
-            for (my $i=0; $i<$keys->Length; $i++) {
-                push @name, $ks[$i];
-                push @name, $vs[$i];
-            }
             $k = $keys;
         }
         else {
-            confess 'expected hash or array reference for keys';
+            confess 'expected Tie::IxHash, hash, or array reference for keys';
         }
 
+        my @name = MongoDB::Collection::to_index_string($k);
         my $obj = {"ns" => $ns,
                    "key" => $k,
                    "name" => join("_", @name),
                    "unique" => $unique ? boolean::true : boolean::false};
+        
+        my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;
+        $self->insert("$db.system.indexes", $obj);
+        return;
+    }
+
+    sub ensure_index {
+        my ($self, $ns, $keys, $options, $garbage) = @_;
+
+        # we need to use the crappy old api if...
+        #  - $options isn't a hash, it's a string like "ascending"
+        #  - $keys is a one-element array: [foo]
+        #  - $keys is an array with more than one element and the second 
+        #    element isn't a direction (or at least a good one)
+        #  - Tie::IxHash has values like "ascending"
+        if (($options && ref $options ne 'HASH') ||
+            (ref $keys eq 'ARRAY' && 
+             ($#$keys == 0 || $#$keys >= 1 && !($keys->[1] =~ /-?1/))) ||
+            (ref $keys eq 'Tie::IxHash' && $keys->[2][0] =~ /(de)|(a)scending/)) {
+            _old_ensure_index(@_);
+            return;
+        }
+
+        my $obj = Tie::IxHash->new("ns" => $ns, 
+            "key" => $keys, 
+            "name" => MongoDB::Collection::to_index_string($keys));
+
+        if (exists $options->{unique}) {
+            $obj->Push("unique" => ($options->{unique} ? boolean::true : boolean::false));
+        }
+        if (exists $options->{drop_dups}) {
+            $obj->Push("dropDups" => ($options->{drop_dups} ? boolean::true : boolean::false));
+        }
 
         my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;
         $self->insert("$db.system.indexes", $obj);
@@ -463,6 +511,26 @@ sub authenticate {
 
     return $result;
 }
+
+=head2 send($str)
+
+    my ($insert, $ids) = MongoDB::write_insert('foo.bar', [{name => "joe", age => 40}]);
+    $conn->send($insert);
+
+Low-level function to send a string directly to the database.  Use 
+L<MongoDB::write_insert>, L<MongoDB::write_update>, L<MongoDB::write_remove>, or
+L<MongoDB::write_query> to create a valid string.
+
+=head2 recv(\%info)
+
+    my $cursor = $conn->recv({ns => "foo.bar"});
+
+Low-level function to receive a response from the database. Returns a 
+C<MongoDB::Cursor>.  At the moment, the only required field for C<$info> is 
+"ns", although "request_id" is likely to be required in the future.  The 
+C<$info> hash will be automatically created for you by L<MongoDB::write_query>.
+
+=cut
 
 no Any::Moose;
 __PACKAGE__->meta->make_immutable;

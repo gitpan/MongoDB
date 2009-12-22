@@ -8,14 +8,18 @@ use MongoDB;
 
 my $conn;
 eval {
-    $conn = MongoDB::Connection->new;
+    my $host = "localhost";
+    if (exists $ENV{MONGOD}) {
+        $host = $ENV{MONGOD};
+    }
+    $conn = MongoDB::Connection->new(host => $host);
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 54;
+    plan tests => 57;
 }
 
 my $db = $conn->get_database('test_database');
@@ -178,7 +182,7 @@ eval {
     $aok = 0;
 };
 
-ok($@ =~ m/^bad hint/);
+ok($@ =~ m/bad hint/);
 
 # MongoDB::Cursor::slave_okay
 $MongoDB::Cursor::slave_okay = 1;
@@ -196,3 +200,12 @@ $coll->batch_insert([{'x' => 1}, {'x' => 1}, {'y' => 1}, {'x' => 1, 'z' => 1}]);
 is($coll->query->count, 4, 'count');
 is($coll->query({'x' => 1})->count, 3, 'count query');
 
+is($coll->query->limit(1)->count(1), 1, 'count limit');
+is($coll->query->skip(1)->count(1), 3, 'count skip');
+is($coll->query->limit(1)->skip(1)->count(1), 1, 'count limit & skip');
+
+END {
+    if ($db) {
+        $db->drop;
+    }
+}

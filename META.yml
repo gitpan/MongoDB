@@ -6,6 +6,8 @@ build_requires:
   Data::Types: 0
   DateTime: 0
   ExtUtils::MakeMaker: 6.42
+  File::Slurp: 0
+  FileHandle: 0
   Test::Exception: 0
   Tie::IxHash: 0
   boolean: 0
@@ -34,4 +36,4 @@ requires:
   perl: 5.8.0
 resources:
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.27
+version: 0.28

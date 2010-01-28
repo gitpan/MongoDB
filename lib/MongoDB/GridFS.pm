@@ -15,20 +15,17 @@
 #
 
 package MongoDB::GridFS;
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 # ABSTRACT: A file storage utility
 
 use Any::Moose;
 use MongoDB::GridFS::File;
+use DateTime;
 
 =head1 NAME
 
 MongoDB::GridFS - A file storage utility
-
-=head1 VERSION
-
-version 0.27
 
 =head1 SYNOPSIS
 
@@ -83,6 +80,7 @@ has chunks => (
     required => 1,
 );
 
+
 =head1 METHODS
 
 =head2 find_one ($criteria?, $fields?)
@@ -135,6 +133,21 @@ sub remove {
 Reads from a file handle into the database.  Saves the file 
 with the given metadata.  The file handle must be readable.
 
+Because C<MongoDB::GridFS::insert> takes a file handle, it can be used to insert
+very long strings into the database (as well as files).  C<$fh> must be a 
+FileHandle (not just the native file handle type), so you can insert a string 
+with:
+
+    # open the string like a file
+    my $basic_fh;
+    open($basic_fh, '<', \$very_long_string);
+
+    # turn the file handle into a FileHandle
+    my $fh = FileHandle->new;
+    $fh->fdopen($basic_fh, 'r');
+
+    $gridfs->insert($fh);
+
 =cut
 
 sub insert {
@@ -155,6 +168,8 @@ sub insert {
         $id = MongoDB::OID->new;
     }
 
+    $self->chunks->ensure_index(Tie::IxHash->new(files_id => 1, n => 1));
+
     my $n = 0;
     my $length = 0;
     while ((my $len = $fh->read(my $data, $MongoDB::GridFS::chunk_size)) != 0) {
@@ -168,11 +183,13 @@ sub insert {
 
     # get an md5 hash for the file
     my $result = $self->_database->run_command({"filemd5", $id, 
-                                                "root" => $self->files->full_name});
+                                                "root" => "fs"});
 
     my %copy = %{$metadata};
     $copy{"_id"} = $id;
     $copy{"md5"} = $result->{"md5"};
+    $copy{"chunkSize"} = $MongoDB::GridFS::chunk_size;
+    $copy{"uploadDate"} = DateTime->now;
     $copy{"length"} = $length;
     return $self->files->insert(\%copy);
 }

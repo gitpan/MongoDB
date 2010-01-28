@@ -24,6 +24,8 @@ test_requires 'Tie::IxHash';
 test_requires 'DateTime';
 test_requires 'boolean';
 test_requires 'Data::Types';
+test_requires 'File::Slurp';
+test_requires 'FileHandle';
 
 mongo;
 
@@ -34,7 +36,7 @@ repository 'git://github.com/mongodb/mongo-perl-driver.git';
 WriteAll;
 
 package MY;
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 use Config;
 

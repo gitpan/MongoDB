@@ -3,10 +3,14 @@ use warnings;
 use Test::More;
 use Test::Exception;
 use IO::File;
+use File::Temp;
+use File::Slurp qw(read_file write_file);
 
 use MongoDB;
 use MongoDB::GridFS;
 use MongoDB::GridFS::File;
+use DateTime;
+use FileHandle;
 
 my $m;
 eval {
@@ -21,7 +25,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 40;
+    plan tests => 51;
 }
 
 my $db = $m->get_database('foo');
@@ -39,6 +43,7 @@ is('foo.bar.chunks', $fancy_grid->chunks->full_name);
 # test text insert
 my $dumb_str = "abc\n\nzyw\n";
 my $text_doc = new IO::File("t/input.txt", "r") or die $!;
+my $ts = DateTime->now;
 my $id = $grid->insert($text_doc);
 $text_doc->close;
 
@@ -47,9 +52,12 @@ is(0, $chunk->{'n'});
 is("$id", $chunk->{'files_id'}."", "compare returned id");
 is($dumb_str, $chunk->{'data'}, "compare file content");
 
-my $md5 = $db->run_command({"filemd5" => $chunk->{'files_id'}, "root" => "foo.fs.files"});
+my $md5 = $db->run_command({"filemd5" => $chunk->{'files_id'}, "root" => "fs"});
 my $file = $grid->files->find_one();
-is($file->{'md5'}, $md5->{'md5'});
+ok($file->{'md5'} ne 'd41d8cd98f00b204e9800998ecf8427e', $file->{'md5'});
+is($file->{'md5'}, $md5->{'md5'}, $md5->{'md5'});
+ok($file->{'uploadDate'}->epoch - $ts->epoch < 10);
+is($file->{'chunkSize'}, $MongoDB::GridFS::chunk_size);
 is($file->{'length'}, length $dumb_str, "compare file len");
 is($chunk->{'files_id'}, $file->{'_id'}, "compare ids");
 
@@ -142,7 +150,49 @@ $grid->remove({'filename' => 'garbage.png'}, 1);
 is($grid->files->count, 1, 'remove just one');
 
 unlink 't/output.txt', 't/output.png', 't/outsub.txt';
-$grid->drop;
+
+# multi-chunk
+{
+    $grid->drop;
+
+    foreach (1..3) {
+        my $txt = "HELLO" x 1_000_000; # 5MB
+        
+        my $fh = File::Temp->new;
+        write_file( $fh->filename, $txt ) || die $!;
+        $fh->seek(0, 0);
+
+        $grid->insert( $fh, { filename => $fh->filename } );
+        $fh->close() || die $!;
+        #file is unlinked by dtor
+        
+        # now, spot check that we can retrieve the file
+        my $gridfile = $grid->find_one( { filename => $fh->filename } );
+        my $info = $gridfile->info();
+        
+        is($info->{length}, 5000000, 'length: '.$info->{'length'});
+        is($info->{filename}, $fh->filename, $info->{'filename'});
+    }
+}
+
+# reading from a big string
+{
+    $grid->drop;
+
+    my $txt = "HELLO";
+
+    my $basicfh;
+    open($basicfh, '<', \$txt);
+    
+    my $fh = FileHandle->new;
+    $fh->fdopen($basicfh, 'r');
+    $grid->insert($fh, {filename => 'hello.txt'});
+
+    my $file = $grid->find_one;
+    is($file->info->{filename}, 'hello.txt');
+    is($file->info->{length}, '5');
+}
+
 
 END {
     if ($db) {

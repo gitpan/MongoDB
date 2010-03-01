@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Database;
-our $VERSION = '0.28';
+our $VERSION = '0.29';
 
 # ABSTRACT: A Mongo Database
 
@@ -32,6 +32,10 @@ has _connection => (
 =head1 NAME
 
 MongoDB::Database - A Mongo Database
+
+=head1 SEE ALSO
+
+Core documentation on databases: L<http://dochub.mongodb.org/core/databases>.
 
 =head1 ATTRIBUTES
 
@@ -55,6 +59,7 @@ sub BUILD {
 
 around qw/query find_one insert update remove ensure_index batch_insert/ => sub {
     my ($next, $self, $ns, @args) = @_;
+    $self->_connection->_last_error(undef);
     return $self->$next($self->_query_ns($ns), @args);
 };
 
@@ -141,15 +146,20 @@ sub drop {
 
     my $err = $db->last_error;
 
-Queries the database to check if the last operation caused an error.
+Finds out if the last database operation completed successfully.  If the last
+operation did not complete successfully, returns a hash reference of information
+about the error that occured.
 
 =cut
 
 sub last_error {
     my ($self) = @_;
-    return $self->run_command({
-        "getlasterror" => 1
-    });
+
+    if ($self->_connection->_last_error) {
+        return $self->_connection->_last_error;
+    }
+
+    return $self->run_command({"getlasterror" => 1});
 }
 
 
@@ -161,6 +171,9 @@ Runs a command for this database on the mongo server. Throws an exception with
 an error message if the command fails. Returns the result of the command on
 success.  For a list of possible database commands, see 
 L<http://www.mongodb.org/display/DOCS/Table+of+Database+Commands>.
+
+See also core documentation on database commands: 
+L<http://dochub.mongodb.org/core/commands>.
 
 =cut
 

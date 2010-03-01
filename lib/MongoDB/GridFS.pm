@@ -15,13 +15,14 @@
 #
 
 package MongoDB::GridFS;
-our $VERSION = '0.28';
+our $VERSION = '0.29';
 
 # ABSTRACT: A file storage utility
 
 use Any::Moose;
 use MongoDB::GridFS::File;
 use DateTime;
+use Digest::MD5;
 
 =head1 NAME
 
@@ -34,6 +35,10 @@ MongoDB::GridFS - A file storage utility
     my $grid = $database->get_gridfs;
     my $fh = IO::File->new("myfile", "r");
     $grid->insert($fh, {"filename" => "mydbfile"});
+
+=head1 SEE ALSO
+
+Core documentation on GridFS: L<http://dochub.mongodb.org/core/gridfs>.
 
 =head1 ATTRIBUTES
 
@@ -126,12 +131,16 @@ sub remove {
 }
 
 
-=head2 insert ($fh, $metadata?)
+=head2 insert ($fh, $metadata?, $options?)
 
     my $id = $gridfs->insert($fh, {"content-type" => "text/html"});
 
-Reads from a file handle into the database.  Saves the file 
-with the given metadata.  The file handle must be readable.
+Reads from a file handle into the database.  Saves the file with the given 
+metadata.  The file handle must be readable.  C<$options> can be 
+C<{"safe" => true}>, which will do safe inserts and check the MD5 hash
+calculated by the database against an MD5 hash calculated by the local 
+filesystem.  If the two hashes do not match, then the chunks already inserted
+will be removed and the program will die.
 
 Because C<MongoDB::GridFS::insert> takes a file handle, it can be used to insert
 very long strings into the database (as well as files).  C<$fh> must be a 
@@ -151,9 +160,8 @@ with:
 =cut
 
 sub insert {
-    my $self = shift;
-    my $fh = shift;
-    my $metadata = shift;
+    my ($self, $fh, $metadata, $options) = @_;
+    $options ||= {};
 
     confess "not a file handle" unless $fh;
     $metadata = {} unless $metadata && ref $metadata eq 'HASH';
@@ -175,7 +183,7 @@ sub insert {
     while ((my $len = $fh->read(my $data, $MongoDB::GridFS::chunk_size)) != 0) {
         $self->chunks->insert({"files_id" => $id,
                                "n" => $n,
-                               "data" => bless(\$data)});
+                               "data" => bless(\$data)}, $options);
         $n++;
         $length += $len;
     }
@@ -185,13 +193,25 @@ sub insert {
     my $result = $self->_database->run_command({"filemd5", $id, 
                                                 "root" => "fs"});
 
+    # compare the md5 hashes
+    if ($options->{safe}) {
+        my $md5 = Digest::MD5->new;
+        $md5->addfile($fh);
+        my $digest = $md5->hexdigest;
+        if ($digest ne $result->{md5}) {
+            # cleanup and die
+            $self->chunks->remove({files_id => $id});
+            die "md5 hashes don't match: database got $result->{md5}, fs got $digest";
+        }
+    }
+
     my %copy = %{$metadata};
     $copy{"_id"} = $id;
     $copy{"md5"} = $result->{"md5"};
     $copy{"chunkSize"} = $MongoDB::GridFS::chunk_size;
     $copy{"uploadDate"} = DateTime->now;
     $copy{"length"} = $length;
-    return $self->files->insert(\%copy);
+    return $self->files->insert(\%copy, $options);
 }
 
 =head2 drop

@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Collection;
-our $VERSION = '0.28';
+our $VERSION = '0.29';
 
 # ABSTRACT: A Mongo Collection
 
@@ -23,10 +23,15 @@ our $VERSION = '0.28';
 
 MongoDB::Collection - A Mongo Collection
 
+=head1 SEE ALSO
+
+Core documentation on collections: L<http://dochub.mongodb.org/core/collections>.
+
 =cut
 
 use Tie::IxHash;
 use Any::Moose;
+use boolean;
 
 has _database => (
     is       => 'ro',
@@ -146,15 +151,21 @@ Order results.
 
 =back
 
-=head2 find_one (\%query)
+See also core documentation on querying: 
+L<http://dochub.mongodb.org/core/find>.
+
+=head2 find_one ($query, $fields?)
 
     my $object = $collection->find_one({ name => 'Resi' });
+    my $object = $collection->find_one({ name => 'Resi' }, { name => 1, age => 1});
 
 Executes the given C<$query> and returns the first object matching it.
 C<$query> can be a hash reference, L<Tie::IxHash>, or array reference (with an
-even number of elements).  
+even number of elements).  If C<$fields> is specified, the resulting document 
+will only include the fields given (and the C<_id> field) which can cut down on
+wire traffic.
 
-=head2 insert (\%object, \%options?)
+=head2 insert ($object, $options?)
 
     my $id1 = $coll->insert({ name => 'mongo', type => 'database' });
     my $id2 = $coll->insert({ name => 'mongo', type => 'database' }, {safe => 1});
@@ -166,9 +177,12 @@ specified in the data or a L<MongoDB::OID>.
 
 The optional C<$options> parameter can be used to specify if this is a safe 
 insert.  A safe insert will check with the database if the insert succeeded and
-confess that it did not, if an error occured.
+return 0 if it did not.  You should check C<MongoDB::Database::last_error> to see
+the reason that the insert failed.
 
-=head2 batch_insert (\@array, \%options)
+See also core documentation on insert: L<http://dochub.mongodb.org/core/insert>.
+
+=head2 batch_insert (\@array, $options)
 
     my @ids = $collection->batch_insert([{name => "Joe"}, {name => "Fred"}, {name => "Sam"}]);
 
@@ -177,7 +191,8 @@ array of their _id fields.
 
 The optional C<$options> parameter can be used to specify if this is a safe 
 insert.  A safe insert will check with the database if the insert succeeded and
-confess that it did not, if an error occured.
+return 0 if it did not.  You should check C<$MongoDB::Database::last_error> to see
+the reason that the insert failed.
 
 =head2 update (\%criteria, \%object, \%options?)
 
@@ -185,8 +200,10 @@ confess that it did not, if an error occured.
 
 Updates an existing C<$object> matching C<$criteria> in the database. 
 
-C<update> can take a hash reference of options.  The options 
-currently supported are:
+Returns 1 unless the C<safe> option is set. 
+
+C<update> can take a hash reference of options.  The options currently supported
+are:
 
 =over 
 
@@ -198,18 +215,41 @@ All of the documents that match C<$criteria> will be updated, not just
 the first document found. (Only available with database version 1.1.3 and 
 newer.)
 
+=item C<safe>
+If the update fails and safe is set, this function will return 0.  You should 
+check C<MongoDB::Database::last_error> to find out why the update failed.
+
 =back
 
-=head2 remove (\%query?, $just_one?)
+See also core documentation on update: L<http://dochub.mongodb.org/core/update>.
+
+=head2 remove ($query?, $options?)
 
     $collection->remove({ answer => { '$ne' => 42 } });
 
 Removes all objects matching the given C<$query> from the database. If no
 parameters are given, removes all objects from the collection (but does not
-delete indexes, as C<MongoDB::Collection::drop> does).  Boolean parameter 
-C<$just_one> causes only one matching document to be removed.
+delete indexes, as C<MongoDB::Collection::drop> does).  
 
-=head2 ensure_index (\%keys, $options?)
+Returns 1 unless the safe option is set.
+
+C<remove> can take a hash reference of options.  The options currently supported
+are 
+
+=over
+
+=item C<just_one> 
+Only one matching document to be removed.
+
+=item C<safe>
+If the update fails and safe is set, this function will return 0.  You should 
+check C<MongoDB::Database::last_error> to find out why the update failed.
+
+=back
+
+See also core documentation on remove: L<http://dochub.mongodb.org/core/remove>.
+
+=head2 ensure_index ($keys, $options?)
 
     use boolean;
     $collection->ensure_index({"foo" => 1, "bar" => -1}, { unique => true });
@@ -218,6 +258,8 @@ Makes sure the given C<$keys> of this collection are indexed. C<$keys> can be an
 array reference, hash reference, or C<Tie::IxHash>.  C<Tie::IxHash> is prefered
 for multi-key indexes, so that the keys are in the correct order.  1 creates an 
 ascending index, -1 creates a descending index.  
+
+If the C<safe> option is not set, ensure_index will always return 1.
 
 The second parameter gives index options.  Available options are:
 
@@ -235,7 +277,15 @@ values, creating the index will fail.  To force the index creation by deleting
 duplicate values, use this option.  Again, any value that evaluates to true will
 work.
 
+=item C<safe => boolean>
+
+If the update fails and safe is set, this function will return 0.  You should 
+check C<MongoDB::Database::last_error> to find out why the update failed.
+
 =back
+
+See also core documentation on indexing: 
+L<http://dochub.mongodb.org/core/indexes>.
 
 =cut
 
@@ -249,7 +299,53 @@ sub _query_ns {
     return $self->name;
 }
 
-=head2 count ($query?)
+=head2 save($doc, $options)
+
+    $collection->save({"author" => "joe"});
+    my $post = $collection->find_one;
+
+    $post->{author} = {"name" => "joe", "id" => 123, "phone" => "555-5555"};
+
+    $collection->save($post);
+
+Inserts a document into the database if it does not have an _id field, upserts
+it if it does have an _id field.
+
+=over
+
+=item C<safe => boolean>
+
+If the save fails and safe is set, this function will return 0.  You should 
+check C<MongoDB::Database::last_error> to find out why the update failed.
+
+=back
+
+The return types for this function are a bit of a mess, as it will return the 
+_id if a new document was inserted, 1 if an upsert occurred, and 0 if the safe 
+option was set and an error occurred.
+
+=cut
+
+sub save {
+    my ($self, $doc, $options) = @_;
+
+    if (exists $doc->{"_id"}) {
+
+        if (!$options || !ref $options eq 'HASH') {
+            $options->{'upsert'} = boolean::true;
+        }
+        else {
+            $options = {"upsert" => boolean::true};
+        }
+
+        return $self->update({"_id" => $doc->{"_id"}}, $doc, $options);
+    }
+    else {
+        return $self->insert($doc, $options);
+    }
+}
+
+=head2 count($query?)
 
     my $n_objects = $collection->count({ name => 'Bob' });
 

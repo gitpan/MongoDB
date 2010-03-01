@@ -21,7 +21,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 94;
+    plan tests => 113;
 }
 
 my $db   = $conn->get_database('test_database');
@@ -90,13 +90,21 @@ for (my $i=0; $i<10; $i++) {
 $coll->drop;
 ok(!$coll->get_indexes, 'no indexes yet');
 
-$coll->ensure_index([qw/foo bar baz/]);
-$coll->ensure_index([qw/foo bar/]);
+my $ok = $coll->ensure_index([qw/foo bar baz/]);
+is($ok, 0);
+my $err = $db->last_error;
+is($err->{ok}, 0);
+is($err->{err}, "you're using the old format for ensure_index, ".
+   "please check the documentation and update your code");
+
+$ok = $coll->ensure_index([qw/foo bar/]);
+is($ok, 0);
 $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
 $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
 is($coll->count, 2);
 
-$coll->ensure_index([qw/boo/], "ascending", 1);
+$ok = $coll->ensure_index([qw/boo/], "ascending", 1);
+is($ok, 0);
 $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2});
 
 is($coll->count, 2, 'unique index');
@@ -131,8 +139,10 @@ $coll->drop;
 
 # test new form of ensure index
 {
-    $coll->ensure_index({foo => 1, bar => -1, baz => 1});
-    $coll->ensure_index({foo => 1, bar => 1});
+    $ok = $coll->ensure_index({foo => 1, bar => -1, baz => 1});
+    ok($ok);
+    $ok = $coll->ensure_index({foo => 1, bar => 1});
+    ok($ok);
     $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
     $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
     is($coll->count, 2);
@@ -171,7 +181,7 @@ $coll->drop;
 # ord("\x9F") is 159
 $coll->insert({foo => "\x9F" });
 my $utfblah = $coll->find_one;
-is(ord($utfblah->{'foo'}), 194, 'translate non-utf8 to utf8 char');
+is(ord($utfblah->{'foo'}), 159, 'translate non-utf8 to utf8 char');
 
 $coll->drop;
 $coll->insert({"\x9F" => "hi"});
@@ -340,15 +350,48 @@ is($obj->{data}, 3.3);
 {
     $coll->drop;
     $coll->insert({_id => 1}, {safe => 1});
-    eval {
-        $coll->insert({_id => 1}, {safe => 1});
-    };
-    if ($@) {
-        ok($@ =~ /^E11000/, 'duplicate key exception');
-    }
-    else {
-        ok(0);
-    }
+    $ok = $coll->insert({_id => 1}, {safe => 1});
+    is($ok, 0);
+    is($db->last_error->{code}, 11000);
+}
+
+# safe remove/update
+{
+    $coll->drop;
+    $ok = $coll->remove;
+    is($ok, 1);
+    is($db->last_error->{n}, 0);
+
+    $coll->insert({x=>1});
+    $ok = $coll->remove({}, {safe => 1});
+    is($ok, 1);
+    is($db->last_error->{n}, 1);
+
+    $coll->insert({x=>1});
+    $ok = $coll->update({}, {'$inc' => {x => 1}});
+    is($ok, 1);
+    is($db->last_error->{n}, 1);
+
+    $ok = $coll->update({}, {'$inc' => {x => 2}}, {safe => 1});
+    is($ok, 1);
+    is($db->last_error->{n}, 1);
+}
+
+# save
+{
+    $coll->drop;
+
+    my $x = {"hello" => "world"};
+    $coll->save($x);
+    is($coll->count, 1);
+
+    my $y = $coll->find_one;
+    $y->{"hello"} = 3;
+    $coll->save($y);
+    is($coll->count, 1);
+
+    my $z = $coll->find_one;
+    is($z->{"hello"}, 3);
 }
 
 END {

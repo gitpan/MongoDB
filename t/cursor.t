@@ -19,7 +19,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 57;
+    plan tests => 56;
 }
 
 my $db = $conn->get_database('test_database');
@@ -158,7 +158,6 @@ is($r1->{'sn'}, $r2->{'sn'}, 'reset');
 my $exp = $cursor->explain;
 is($exp->{'n'}, 501, 'explain');
 is($exp->{'cursor'}, 'BasicCursor');
-ok(exists $exp->{'endKey'});
 
 $cursor->reset;
 $exp = $cursor->limit(20)->explain;

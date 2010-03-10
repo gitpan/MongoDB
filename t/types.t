@@ -20,7 +20,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 28;
+    plan tests => 35;
 }
 
 my $db = $conn->get_database('x');
@@ -133,6 +133,64 @@ isa_ok($x->{max}, 'MongoDB::MaxKey');
     my $doc = $coll->find_one;
     is($doc->{'one'}, 'on');
     is($doc->{'two'}, 2);
+}
+
+# binary
+{
+    $coll->remove;
+
+    my $invalid = "\xFE";
+    $coll->insert({"bin" => \$invalid});
+
+    my $one = $coll->find_one;
+    is($one->{'bin'}, "\xFE");
+}
+
+# 64-bit ints
+{
+    use bigint;
+    $coll->remove;
+
+    my $x = 2 ** 34;
+    $coll->save({x => $x});
+    my $result = $coll->find_one;
+
+    is($result->{'x'}, 17179869184);
+
+    $coll->remove;
+
+    $x = (2 ** 34) * -1;
+    $coll->save({x => $x});
+    $result = $coll->find_one;
+
+    is($result->{'x'}, -17179869184);
+
+    $coll->remove;
+
+    $coll->save({x => 2712631400});
+    $result = $coll->find_one;
+    is($result->{'x'}, 2712631400);
+
+    my $aok = 1;
+    eval {
+        my $ok = $coll->save({x => 9834590149023841902384137418571984503});
+        my $aok = 0;
+    };
+
+    ok($@ =~ m/BigInt is too large/);
+    ok($aok);
+
+    $coll->remove;
+}
+
+SKIP: {
+    use Config;
+    skip "Skipping 64 bit native SV", 1
+        if ( !$Config{use64bitint} );
+
+    $coll->update({ x => 1 }, { '$inc' => { 'y' => 19401194714 } }, { 'upsert' => 1 });
+    my $result = $coll->find_one;
+    is($result->{'y'},19401194714,'64 bit ints without Math::BigInt');
 }
 
 END {

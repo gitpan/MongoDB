@@ -68,6 +68,45 @@ where the name field exists):
 
     my $cursor = $collection->query({"name" => {'$exists' => boolean::true}});
 
+=head2 Numbers
+
+By default, numbers with a decimal point will be saved as doubles (64-bit).
+
+=head3 32-bit Platforms
+
+Numbers without decimal points will be saved as 32-bit integers.  To save a 
+number as a 64-bit integer, use bigint:
+
+    use bigint;
+
+    $collection->insert({"user_id" => 28347197234178})
+
+The driver will die if you try to insert a number beyond the signed 64-bit 
+range: -9,223,372,036,854,775,808 to +9,223,372,036,854,775,807.
+
+Numbers that are saved as 64-bit integers will be decoded as doubles.
+
+=head3 64-bit Platforms
+
+Numbers without a decimal point will be saved and returned as 64-bit integers.
+
+Keep in mind that this can cause some weirdness to ensue if some machines are
+32-bit and others are 64-bit.  Take the following example:
+
+=over 4
+
+=item * Programmer 1 saves an int on a 32-bit platform.
+
+=item * Programmer 2 retrieves the document on a 64-bit platform and re-saves it,
+effectively converting it to a 64-bit int.
+
+=item * Programmer 1 retrieves the document on their 32-bit machine, which decodes the
+64-bit int as a double.
+
+=back
+
+Nothing drastic, but good to be aware of.
+
 =head2 Other
 
 There are a few Mongo-specific data types.
@@ -86,6 +125,19 @@ To create a unique id:
 To create a MongoDB::OID from an existing 24-character hexidecimal string:
 
     my $oid = MongoDB::OID->new("123456789012345678901234");
+
+=head3 Binary Data
+
+By default, all database strings are UTF8.  To save images, binaries, and other
+non-UTF8 data, you can pass the string as a reference to the database.  For 
+example:
+
+    # non-utf8 string
+    my $string = "\xFF\xFE\xFF";
+
+    $collection->insert({"photo" => \$string});
+
+This will save the variable as binary data, bypassing the UTF8 check.
 
 =head3 MongoDB::MinKey
 

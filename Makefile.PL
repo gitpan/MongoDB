@@ -36,7 +36,7 @@ repository 'git://github.com/mongodb/mongo-perl-driver.git';
 WriteAll;
 
 package MY;
-our $VERSION = '0.29';
+our $VERSION = '0.30';
 
 use Config;
 
@@ -50,6 +50,13 @@ sub const_cccmd {
     }
     else {
         $inherited .= ' -o $@';
+    }
+
+    if ($Config{use64bitint}) {
+        $inherited .= ' -DUSE_64_BIT_INT';
+    }
+    else {
+        $inherited .= ' ';
     }
 
     return $inherited;

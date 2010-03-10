@@ -342,7 +342,11 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_LONG: {
+#if defined(USE_64_BIT_INT)
+    value = newSViv(MONGO_64(*((int64_t*)buf->pos)));
+#else
     value = newSVnv((double)MONGO_64(*((int64_t*)buf->pos)));
+#endif
     buf->pos += INT_64;
     break;
   }
@@ -860,6 +864,58 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
 
                 SvREFCNT_dec (attr);
             }
+            /* 64-bit integers */
+            else if (sv_isa(sv, "Math::BigInt")) {
+              int64_t big = 0;
+              int offset = 1, i = 0, length = 0, sign = 1;
+              SV **av_ref, **sign_ref;
+              AV *av;
+ 
+              set_type(buf, BSON_LONG);
+              perl_mongo_serialize_key(buf, key, ids);
+
+              // get sign
+              sign_ref = hv_fetch((HV*)SvRV(sv), "sign", strlen("sign"), 0);
+              if (!sign_ref) {
+                croak( "couldn't get BigInt sign" );
+              }
+              else if ( SvPOK(*sign_ref) && strcmp(SvPV_nolen( *sign_ref ), "-") == 0 ) {
+                sign = -1;
+              }
+
+              // get value
+              av_ref = hv_fetch((HV*)SvRV(sv), "value", strlen("value"), 0);
+              if (!av_ref) {
+                croak( "couldn't get BigInt value" );
+              }
+
+              av = (AV*)SvRV(*av_ref);
+
+              if ( av_len( av ) > 3 ) {
+                croak( "BigInt is too large" );
+              }
+
+              for (i = 0; i <= av_len( av ); i++) {
+                SV **val;
+                
+                if ( !(val = av_fetch (av, i, 0)) || !(SvPOK(*val) || SvIOK(*val)) ) {
+                  sv_dump( sv );
+                  croak ("failed to fetch BigInt element");
+                }
+
+                if ( SvIOK(*val) ) {
+                  big += ((int64_t)SvIV(*val)) * offset;
+                }
+                else {
+                  big += ((int64_t)atoi(SvPV_nolen(*val))) * offset;
+                }
+
+                length += strlen(SvPV_nolen(*val));
+                offset = pow(10, length);
+              }
+
+              perl_mongo_serialize_long(buf, big*sign);
+            }
 	    /* Tie::IxHash */
             else if (sv_isa(sv, "Tie::IxHash")) {
               set_type(buf, BSON_OBJECT);
@@ -949,6 +1005,12 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
                     perl_mongo_serialize_key(buf, key, ids);
                     av_to_bson (buf, (AV *)SvRV (sv));
                     break;
+                case SVt_PV:
+                    /* binary */
+                    set_type(buf, BSON_BINARY);
+                    perl_mongo_serialize_key(buf, key, ids);
+                    perl_mongo_serialize_bindata(buf, SvRV(sv));
+                    break;
                 default:
                     sv_dump(SvRV(sv));
                     croak ("type (ref) unhandled");
@@ -971,11 +1033,18 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
             case SVt_PVIV: 
             case SVt_PVLV: {
               if (SvIOK(sv)) {
+#if defined(USE_64_BIT_INT)
+                set_type(buf, BSON_LONG);
+                perl_mongo_serialize_key(buf, key, ids);
+                perl_mongo_serialize_long(buf, (int64_t)SvIV(sv));
+#else
                 set_type(buf, BSON_INT);
                 perl_mongo_serialize_key(buf, key, ids);
-                perl_mongo_serialize_int(buf, (int)SvIV (sv));
+                perl_mongo_serialize_int(buf, (int)SvIV(sv));
+#endif
                 break;
               }
+
             }
 	    /* string */
             case SVt_PV:

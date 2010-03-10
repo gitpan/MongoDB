@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.29';
+our $VERSION = '0.30';
 
 # ABSTRACT: A connection to a Mongo server
 
@@ -23,6 +23,7 @@ use MongoDB;
 use MongoDB::Cursor;
 
 use Any::Moose;
+use Any::Moose 'Util::TypeConstraints';
 use Digest::MD5;
 use Tie::IxHash;
 use boolean;
@@ -164,6 +165,18 @@ has auto_connect => (
     default  => 1,
 );
 
+=head2 timeout
+
+Connection timeout in milliseconds. Defaults to C<20000>.
+
+=cut
+
+has timeout => (
+    is       => 'ro',
+    isa      => subtype( 'Natural' => as 'Int' => where { $_ > 0 } =>  message {"$_ is not a positive Integer" } ),
+    required => 1,
+    default  => 20000,
+);
 
 has _last_error => (
     is => 'rw',
@@ -492,7 +505,7 @@ sub find_master {
 
     # check the left host
     eval {
-        $left = MongoDB::Connection->new("host" => $self->left_host, "port" => $self->left_port);
+        $left = MongoDB::Connection->new("host" => $self->left_host, "port" => $self->left_port, timeout => $self->timeout);
     };
     if (!($@ =~ m/couldn't connect to server/)) {
         $master = $left->find_one('admin.$cmd', {ismaster => 1});
@@ -503,7 +516,7 @@ sub find_master {
 
     # check the right_host
     eval {
-        $right = MongoDB::Connection->new("host" => $self->right_host, "port" => $self->right_port);
+        $right = MongoDB::Connection->new("host" => $self->right_host, "port" => $self->right_port, timeout => $self->timeout);
     };
     if (!($@ =~ m/couldn't connect to server/)) {
         $master = $right->find_one('admin.$cmd', {ismaster => 1});

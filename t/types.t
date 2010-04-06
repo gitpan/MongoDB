@@ -5,6 +5,7 @@ use Test::Exception;
 
 use MongoDB;
 use MongoDB::OID;
+use MongoDB::Code;
 use DateTime;
 
 my $conn;
@@ -20,7 +21,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 35;
+    plan tests => 44;
 }
 
 my $db = $conn->get_database('x');
@@ -179,6 +180,41 @@ isa_ok($x->{max}, 'MongoDB::MaxKey');
 
     ok($@ =~ m/BigInt is too large/);
     ok($aok);
+
+    $coll->remove;
+}
+
+# code
+{
+    my $str = "function() { return 5; }";
+    my $code = MongoDB::Code->new("code" => $str);
+    my $scope = $code->scope;
+    is(keys %$scope, 0);
+
+    $coll->insert({"code" => $code});
+    my $ret = $coll->find_one;
+    my $ret_code = $ret->{code};
+    $scope = $ret_code->scope;
+    is(keys %$scope, 0);
+    is($ret_code->code, $str);
+
+    my $x = $db->eval($code);
+    is($x, 5);
+
+    $str = "function() { return name; }";
+    $code = MongoDB::Code->new("code" => $str,
+                               "scope" => {"name" => "Fred"});
+    $x = $db->eval($code);
+    is($x, "Fred");
+
+    $coll->remove;
+
+    $coll->insert({"x" => "foo", "y" => $code, "z" => 1});
+    $x = $coll->find_one;
+    is($x->{x}, "foo");
+    is($x->{y}->code, $str);
+    is($x->{y}->scope->{"name"}, "Fred");
+    is($x->{z}, 1);
 
     $coll->remove;
 }

@@ -284,6 +284,7 @@ elem_to_sv (int type, buffer *buf)
     buf->pos += DOUBLE_64;
     break;
   }
+  case BSON_SYMBOL:
   case BSON_STRING: {
     int len = MONGO_32(*((int*)buf->pos));
     buf->pos += INT_32;
@@ -426,7 +427,28 @@ elem_to_sv (int type, buffer *buf)
   }
   case BSON_CODE:
   case BSON_CODE__D: {
-    // TODO
+    SV *code, *scope;
+    int code_len;
+
+    if (type == BSON_CODE) {
+      buf->pos += INT_32;
+    }
+
+    code_len = MONGO_32(*(int*)buf->pos);
+    buf->pos += INT_32;
+
+    code = sv_2mortal(newSVpvn(buf->pos, code_len-1));
+    buf->pos += code_len;
+
+    if (type == BSON_CODE) {
+      scope = perl_mongo_bson_to_sv(buf);
+
+      value = perl_mongo_construct_instance("MongoDB::Code", "code", code, "scope", scope, NULL);
+    }
+    else {
+      value = perl_mongo_construct_instance("MongoDB::Code", "code", code, NULL);
+    }
+
     break;
   }
   case BSON_TIMESTAMP: {
@@ -677,6 +699,12 @@ hv_to_bson (buffer *buf, SV *sv, AV *ids)
     /* skip first 4 bytes to leave room for size */
     buf->pos += INT_32;
 
+    if (!SvROK(sv)) {
+      perl_mongo_serialize_null(buf);
+      perl_mongo_serialize_size(buf->start+start, buf);
+      return;
+    }
+
     hv = (HV*)SvRV(sv);
 
     if (ids) {
@@ -866,8 +894,8 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
             }
             /* 64-bit integers */
             else if (sv_isa(sv, "Math::BigInt")) {
-              int64_t big = 0;
-              int offset = 1, i = 0, length = 0, sign = 1;
+              int64_t big = 0, offset = 1;
+              int i = 0, length = 0, sign = 1;
               SV **av_ref, **sign_ref;
               AV *av;
  
@@ -896,6 +924,7 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
               }
 
               for (i = 0; i <= av_len( av ); i++) {
+                int j = 0;
                 SV **val;
                 
                 if ( !(val = av_fetch (av, i, 0)) || !(SvPOK(*val) || SvIOK(*val)) ) {
@@ -904,14 +933,27 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
                 }
 
                 if ( SvIOK(*val) ) {
-                  big += ((int64_t)SvIV(*val)) * offset;
+                  int64_t temp = SvIV(*val);
+
+                  while (temp > 0) {
+                    temp = temp / 10;
+                    length++;
+                  }
+
+                  temp = (int64_t)(((int64_t)SvIV(*val)) * (int64_t)offset);
+                  big = big + temp;
                 }
                 else {
+                  STRLEN len;
+                  char *str = SvPV(*val, len);
+
+                  length += len;
                   big += ((int64_t)atoi(SvPV_nolen(*val))) * offset;
                 }
 
-                length += strlen(SvPV_nolen(*val));
-                offset = pow(10, length);
+                for (j = 0; j < length; j++) {
+                  offset *= 10;
+                }
               }
 
               perl_mongo_serialize_long(buf, big*sign);
@@ -940,6 +982,31 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
               set_type(buf, BSON_BOOL);
               perl_mongo_serialize_key(buf, key, ids);
               perl_mongo_serialize_byte(buf, SvIV(SvRV(sv)));
+            }
+            else if (sv_isa(sv, "MongoDB::Code")) {
+              SV *code, *scope;
+              char *code_str;
+              STRLEN code_len;
+              int start;
+
+              set_type(buf, BSON_CODE);
+              perl_mongo_serialize_key(buf, key, ids);
+
+              start = buf->pos-buf->start;
+              buf->pos += INT_32;
+
+              code = perl_mongo_call_reader (sv, "code");
+              code_str = SvPV(code, code_len);
+              perl_mongo_serialize_int(buf, code_len+1);
+              perl_mongo_serialize_string(buf, code_str, code_len);
+
+              scope = perl_mongo_call_method (sv, "scope", 0);
+              hv_to_bson(buf, scope, 0);
+
+              perl_mongo_serialize_size(buf->start+start, buf);
+
+              SvREFCNT_dec(code);
+              SvREFCNT_dec(scope);
             }
             else if (sv_isa(sv, "MongoDB::MinKey")) {
               set_type(buf, BSON_MINKEY);

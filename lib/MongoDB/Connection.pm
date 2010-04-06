@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.30';
+our $VERSION = '0.31';
 
 # ABSTRACT: A connection to a Mongo server
 
@@ -60,7 +60,34 @@ Core documentation on connections: L<http://dochub.mongodb.org/core/connections>
 
 =head2 host
 
-Hostname to connect to. Defaults to C<localhost>.
+Server or servers to connect to. Defaults to C<mongodb://localhost:27017>.  
+
+To connect to more than one database server, use the format:
+
+    mongodb://host1[:port1][,host2[:port2],...[,hostN[:portN]]]
+
+An arbitrary number of hosts can be specified.
+
+The connect method will return that it succeeded if it can connect to at least 
+one of the hosts listed.  If it cannot connect to any hosts, it will die. 
+
+If a port is not specified for a given host, it will default to 27017. For 
+example, to connecting to C<localhost:27017> and C<localhost:27018>:
+
+    $conn = MongoDB::Connection->new("host" => "mongodb://localhost,localhost:27018");
+
+This will succeed if either C<localhost:27017> or C<localhost:27018> are available.
+
+The connect method will also try to determine who is master if more than one 
+server is given.  It will try the hosts in order from left to right.  As soon as
+one of the hosts reports that it is master, the connect will return.  If no 
+hosts report themselves as masters, the connect will die, reporting that it 
+could not find a master.
+
+If username and password are given, success is conditional on being able to log 
+into the database as well as connect.  By default, the driver will attempt to
+authenticate with the admin database.  If a different database is specified
+using the C<db_name> property, it will be used instead.  
 
 =cut
 
@@ -68,10 +95,12 @@ has host => (
     is       => 'ro',
     isa      => 'Str',
     required => 1,
-    default  => 'localhost',
+    default  => 'mongodb://localhost:27017',
 );
 
-=head2 port
+=head2 port [deprecated]
+
+Use host instead.
 
 Port to use when connecting. Defaults to C<27017>.
 
@@ -84,7 +113,9 @@ has port => (
     default  => 27017,
 );
 
-=head2 left_host
+=head2 left_host [deprecated]
+
+Use host instead.
 
 Paired connection host to connect to. Can be master or slave.
 
@@ -95,7 +126,9 @@ has left_host => (
     isa      => 'Str',
 );
 
-=head2 left_port
+=head2 left_port [deprecated]
+
+Use host instead.
 
 Port to use when connecting to left_host. Defaults to C<27017>.
 
@@ -107,7 +140,9 @@ has left_port => (
     default  => 27017,
 );
 
-=head2 right_host
+=head2 right_host [deprecated]
+
+Use host instead.
 
 Paired connection host to connect to. Can be master or slave.
 
@@ -118,7 +153,9 @@ has right_host => (
     isa      => 'Str',
 );
 
-=head2 right_port
+=head2 right_port [deprecated]
+
+Use host instead.
 
 Port to use when connecting to right_host. Defaults to C<27017>.
 
@@ -128,13 +165,6 @@ has right_port => (
     is       => 'ro',
     isa      => 'Int',
     default  => 27017,
-);
-
-has _server => (
-    is       => 'ro',
-    isa      => 'Str',
-    lazy     => 1,
-    builder  => '_build__server',
 );
 
 =head2 auto_reconnect
@@ -173,27 +203,105 @@ Connection timeout in milliseconds. Defaults to C<20000>.
 
 has timeout => (
     is       => 'ro',
-    isa      => subtype( 'Natural' => as 'Int' => where { $_ > 0 } =>  message {"$_ is not a positive Integer" } ),
+    isa      => 'Int',
     required => 1,
     default  => 20000,
 );
+
+=head2 username
+
+Username for this connection.  Optional.  If this and the password field are 
+set, the connection will attempt to authenticate on connection/reconnection.
+
+=cut
+
+has username => (
+    is       => 'rw',
+    isa      => 'Str',
+    required => 0,
+);
+
+=head2 password
+
+Password for this connection.  Optional.  If this and the username field are 
+set, the connection will attempt to authenticate on connection/reconnection.
+
+=cut
+
+has password => (
+    is       => 'rw',
+    isa      => 'Str',
+    required => 0,
+);
+
+=head2 db_name
+
+Database to authenticate on for this connection.  Optional.  If this, the 
+username, and the password fields are set, the connection will attempt to 
+authenticate against this database on connection/reconnection.  Defaults to
+"admin".
+
+=cut
+
+has db_name => (
+    is       => 'rw',
+    isa      => 'Str',
+    required => 1,
+    default  => 'admin',
+);
+
 
 has _last_error => (
     is => 'rw',
 );
 
-
-sub _build__server {
+sub _get_hosts {
     my ($self) = @_;
-    my ($host, $port) = map { $self->$_ } qw/host port/;
-    return "${host}:${port}";
+    my @hosts;
+
+    # deprecated syntax
+    if (!($self->host =~ /^mongodb:\/\//)) {
+        push @hosts, {host => $self->host, port => $self->port};
+        return @hosts;
+    }
+    elsif ($self->left_host && $self->right_host) {
+        push @hosts, {host => $self->left_host, port => $self->left_port};
+        push @hosts, {host => $self->right_host, port => $self->right_port};
+        return @hosts;
+    }
+
+    my $str = substr $self->host, 10;
+
+    my @pairs = split ",", $str;
+
+    foreach (@pairs) {
+        my @hp = split ":", $_;
+
+        if (!exists $hp[1]) {
+            $hp[1] = 27017;
+        }
+
+        push @hosts, {host => $hp[0], port => $hp[1]};
+    }
+
+    return @hosts;
 }
 
 sub BUILD {
     my ($self) = @_;
     eval "use ${_}" # no Any::Moose::load_class becase the namespaces already have symbols from the xs bootstrap
         for qw/MongoDB::Database MongoDB::Cursor MongoDB::OID/;
-    $self->connect if $self->auto_connect;
+
+    my @hosts = $self->_get_hosts;
+    $self->_init_conn(\@hosts);
+
+    if ($self->auto_connect) {
+        $self->connect;
+
+        if (defined $self->username && defined $self->password) {
+            $self->authenticate($self->db_name, $self->username, $self->password);
+        }
+    }
 }
 
 =head1 METHODS
@@ -424,9 +532,14 @@ sub remove {
             return 0;
         }
 
-        my $obj = Tie::IxHash->new("ns" => $ns, 
-            "key" => $keys, 
-            "name" => MongoDB::Collection::to_index_string($keys));
+        my $obj = Tie::IxHash->new("ns" => $ns, "key" => $keys);
+
+        if (exists $options->{name}) {
+            $obj->Push("name" => $options->{name});
+        }
+        else {
+            $obj->Push("name" => MongoDB::Collection::to_index_string($keys));
+        }
 
         if (exists $options->{unique}) {
             $obj->Push("unique" => ($options->{unique} ? boolean::true : boolean::false));
@@ -477,30 +590,37 @@ sub get_database {
 
 Determines which host of a paired connection is master.  Does nothing for
 a non-paired connection.  This need never be invoked by a user, it is 
-called automatically by internal functions.  Returns values:
-
-=over
-
-=item 0 
-
-The left host is master
-
-=item 1
-
-The right host is master
-
-=item -1 
-
-Error, master cannot be determined.
-
-=back
+called automatically by internal functions.  Returns the index of the master
+connection in the list of connections or -1 if it cannot be determined.
 
 =cut
 
 sub find_master {
     my ($self) = @_;
     # return if the connection isn't paired
-    return unless defined $self->left_host && $self->right_host;
+    if (!(defined $self->left_host) || !(defined $self->right_host)) {
+        my @servers = $self->_get_hosts;
+        return -1 unless @servers;
+
+        my $index = 0;
+        foreach (@servers) {
+            my $conn;
+            eval {
+                $conn = MongoDB::Connection->new("host" => $_->{host}, "port" => $_->{port}, timeout => $self->timeout);
+            };
+            if (!($@ =~ m/couldn't connect to server/)) {
+                my $master = $conn->find_one('admin.$cmd', {ismaster => 1});
+                if ($master->{'ismaster'}) {    
+                    return $index;
+                }
+            }
+
+            $index++;
+        }
+
+        return -1;
+    }
+
     my ($left, $right, $master);
 
     # check the left host
@@ -513,7 +633,7 @@ sub find_master {
             return 0;
         }
     }
-
+    
     # check the right_host
     eval {
         $right = MongoDB::Connection->new("host" => $self->right_host, "port" => $self->right_port, timeout => $self->timeout);

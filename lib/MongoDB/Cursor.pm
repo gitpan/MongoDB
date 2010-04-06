@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Cursor;
-our $VERSION = '0.30';
+our $VERSION = '0.31';
 
 # ABSTRACT: A cursor/iterator for Mongo query results
 use Any::Moose;
@@ -82,6 +82,16 @@ Whether it is okay to run queries on the slave.  Defaults to 0.
 =cut
 
 $MongoDB::Cursor::slave_okay = 0;
+
+=head2 timeout
+
+How many milliseconds to wait for a response from the server.  Set to 30000
+(30 seconds) by default.  -1 waits forever (or until TCP times out, which is
+usually a long time).
+
+=cut
+
+$MongoDB::Cursor::timeout = 30000;
 
 =head1 ATTRIBUTES
 

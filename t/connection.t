@@ -18,7 +18,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 9;
+    plan tests => 11;
 }
 
 throws_ok {
@@ -26,20 +26,32 @@ throws_ok {
 } qr/couldn't connect to server/, 'exception on connection failure';
 
 SKIP: {
-    skip "connecting to default host/port won't work with a remote db", 4 if exists $ENV{MONGOD};
+    skip "connecting to default host/port won't work with a remote db", 7 if exists $ENV{MONGOD};
 
     lives_ok {
         $conn = MongoDB::Connection->new;
     } 'successful connection';
     isa_ok($conn, 'MongoDB::Connection');
     
-    is($conn->host, 'localhost', 'host default value');
-    is($conn->port, '27017',     'port default value');
+    is($conn->host, 'mongodb://localhost:27017', 'host default value');
 
     # just make sure a couple timeouts work
     my $to = MongoDB::Connection->new('timeout' => 1);
     $to = MongoDB::Connection->new('timeout' => 123);
     $to = MongoDB::Connection->new('timeout' => 2000000);
+
+    # test conn format
+    lives_ok {
+        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27017");
+    } 'connected';
+
+    lives_ok {
+        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27017,");
+    } 'extra comma';
+
+    lives_ok {
+        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27018,localhost:27019,localhost");
+    } 'last in line';
 }
 
 my $db = $conn->get_database('test_database');

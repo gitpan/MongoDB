@@ -126,7 +126,6 @@ int perl_mongo_connect(char *host, int port, int timeout) {
 #else
   fcntl(sock, F_SETFL, 0);
 #endif
-
   return sock;
 }
 

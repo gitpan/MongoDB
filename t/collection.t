@@ -21,10 +21,10 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 113;
+    plan tests => 114;
 }
 
-my $db   = $conn->get_database('test_database');
+my $db = $conn->get_database('test_database');
 $db->drop;
 
 my $coll = $db->get_collection('test_collection');
@@ -90,21 +90,22 @@ for (my $i=0; $i<10; $i++) {
 $coll->drop;
 ok(!$coll->get_indexes, 'no indexes yet');
 
-my $ok = $coll->ensure_index([qw/foo bar baz/]);
-is($ok, 0);
+my $indexes = Tie::IxHash->new(foo => 1, bar => 1, baz => 1);
+my $ok = $coll->ensure_index($indexes);
+isa_ok($ok, 'MongoDB::OID');
 my $err = $db->last_error;
-is($err->{ok}, 0);
-is($err->{err}, "you're using the old format for ensure_index, ".
-   "please check the documentation and update your code");
+is($err->{ok}, 1);
+is($err->{err}, undef);
 
-$ok = $coll->ensure_index([qw/foo bar/]);
-is($ok, 0);
+$indexes = Tie::IxHash->new(foo => 1, bar => 1);
+$ok = $coll->ensure_index($indexes);
+isa_ok($ok, 'MongoDB::OID');
 $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
 $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
 is($coll->count, 2);
 
-$ok = $coll->ensure_index([qw/boo/], "ascending", 1);
-is($ok, 0);
+$ok = $coll->ensure_index({boo => 1}, {unique => 1});
+isa_ok($ok, 'MongoDB::OID');
 $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2});
 
 is($coll->count, 2, 'unique index');
@@ -350,8 +351,8 @@ is($obj->{data}, 3.3);
 {
     $coll->drop;
     $coll->insert({_id => 1}, {safe => 1});
-    $ok = $coll->insert({_id => 1}, {safe => 1});
-    is($ok, 0);
+    eval {$coll->insert({_id => 1}, {safe => 1})};
+    ok($@ and $@ =~ /^E11000/, 'duplicate key exception');
 
   SKIP: {
       skip "the version of the db you're running doesn't give error codes, you may wish to consider upgrading", 1 if !exists $db->last_error->{code};
@@ -363,23 +364,24 @@ is($obj->{data}, 3.3);
 # safe remove/update
 {
     $coll->drop;
+
     $ok = $coll->remove;
     is($ok, 1);
     is($db->last_error->{n}, 0);
 
-    $coll->insert({x=>1});
-    $ok = $coll->remove({}, {safe => 1});
-    is($ok, 1);
-    is($db->last_error->{n}, 1);
+    my $syscoll = $db->get_collection('system.indexes');
+    eval {
+        $ok = $syscoll->remove({}, {safe => 1});
+    };
+
+    ok($@ && $@ =~ 'cannot delete from system namespace');
 
     $coll->insert({x=>1});
     $ok = $coll->update({}, {'$inc' => {x => 1}});
     is($ok, 1);
-    is($db->last_error->{n}, 1);
 
     $ok = $coll->update({}, {'$inc' => {x => 2}}, {safe => 1});
     is($ok, 1);
-    is($db->last_error->{n}, 1);
 }
 
 # save
@@ -397,6 +399,44 @@ is($obj->{data}, 3.3);
 
     my $z = $coll->find_one;
     is($z->{"hello"}, 3);
+}
+
+# find
+{
+    $coll->drop;
+
+    $coll->insert({x => 1});
+    $coll->insert({x => 4});
+    $coll->insert({x => 5});
+
+    my $cursor = $coll->find({x=>4});
+    my $result = $cursor->next;
+    is($result->{'x'}, 4);
+
+    $cursor = $coll->find({x=>{'$gt' => 1}})->sort({x => -1});
+    $result = $cursor->next;
+    is($result->{'x'}, 5);
+    $result = $cursor->next;
+    is($result->{'x'}, 4);
+}
+
+# count
+SKIP: {
+    skip "have to figure out a way of making this less machine-dependant", 1;
+    my $timeout = $MongoDB::Cursor::timeout;
+    $MongoDB::Cursor::timeout = 0;
+
+    for (0 .. 10000) {
+        $coll->insert({"field1" => "foo", "field2" => "bar", 'x' => $_});
+    }
+
+    eval {
+        my $num = $coll->count({'x' => {'$lt' => 9000, '$gt' => 1233}});
+    };
+
+    ok($@ && $@ =~ /recv timed out/, 'count timeout');
+
+    $MongoDB::Cursor::timeout = $timeout;
 }
 
 END {

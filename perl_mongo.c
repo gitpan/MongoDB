@@ -24,6 +24,8 @@
 #include "regcomp.h"
 
 static int isUTF8(const char*, int);
+static void serialize_regex(buffer*, const char*, REGEXP*, AV*);
+static void serialize_regex_flags(buffer*, SV*);
 
 void
 perl_mongo_call_xs (pTHX_ void (*subaddr) (pTHX_ CV *), CV *cv, SV **mark)
@@ -415,9 +417,15 @@ elem_to_sv (int type, buffer *buf)
 #endif
      // eo version-dependent code
 
+#if PERL_REVISION==5 && PERL_VERSION>=12
+    // they removed magic and made this a normal obj in 5.12
+    regex_ref = newRV((SV*)re);
+#else
     regex = sv_2mortal(newSVpv("",0));
     regex_ref = newRV((SV*)regex);
+
     sv_magic(regex, (SV*)re, PERL_MAGIC_qr, 0, 0);
+#endif
 
     stash = gv_stashpv("Regexp", 0);
     sv_bless(regex_ref, stash);
@@ -1016,39 +1024,25 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
               set_type(buf, BSON_MAXKEY);
               perl_mongo_serialize_key(buf, key, ids);
             }
+#if PERL_REVISION==5 && PERL_VERSION>=12
+            // Perl 5.12 regexes
+            else if (sv_isa(sv, "Regexp")) {
+              REGEXP * re = SvRX(sv);
+              
+              serialize_regex(buf, key, re, ids);
+              serialize_regex_flags(buf, sv);
+            }
+#endif
             else if (SvTYPE(SvRV(sv)) == SVt_PVMG) {
+
               MAGIC *remg;
 
+              /* regular expression */
               if ((remg = mg_find((SV*)SvRV(sv), PERL_MAGIC_qr)) != 0) {
-		/* regular expression */
-                int f=0, i=0;
-                STRLEN string_length;
-                char flags[] = {0,0,0,0,0,0};
-                char *string;
                 REGEXP *re = (REGEXP *) remg->mg_obj;
 
-                set_type(buf, BSON_REGEX);
-                perl_mongo_serialize_key(buf, key, ids);
-                perl_mongo_serialize_string(buf, RX_PRECOMP(re), RX_PRELEN(re));
-
-                string = SvPV(sv, string_length);
-                
-                for(i = 2; i < string_length && string[i] != '-'; i++) {
-                  if (string[i] == 'i' ||
-                      string[i] == 'm' ||
-                      string[i] == 'x' ||
-                      string[i] == 'l' ||
-                      string[i] == 's' ||
-                      string[i] == 'u') {
-                    flags[f++] = string[i];
-                  }
-                  else if(string[i] == ':') {
-                    break;
-                  }
-                }
-
-                perl_mongo_serialize_string(buf, flags, strlen(flags));
-                
+                serialize_regex(buf, key, re, ids);
+                serialize_regex_flags(buf, sv);                
               }
               else {
 		/* binary */
@@ -1141,6 +1135,36 @@ append_sv (buffer *buf, const char *key, SV *sv, AV *ids)
         }
     }
 }
+
+static void serialize_regex(buffer *buf, const char *key, REGEXP *re, AV *ids) {
+  set_type(buf, BSON_REGEX);
+  perl_mongo_serialize_key(buf, key, ids);
+  perl_mongo_serialize_string(buf, RX_PRECOMP(re), RX_PRELEN(re));
+}
+
+static void serialize_regex_flags(buffer *buf, SV *sv) {
+  char flags[] = {0,0,0,0,0,0};
+  int i = 0, f = 0;
+  STRLEN string_length;
+  char *string = SvPV(sv, string_length);
+                
+  for(i = 2; i < string_length && string[i] != '-'; i++) {
+    if (string[i] == 'i' ||
+        string[i] == 'm' ||
+        string[i] == 'x' ||
+        string[i] == 'l' ||
+        string[i] == 's' ||
+        string[i] == 'u') {
+      flags[f++] = string[i];
+    }
+    else if(string[i] == ':') {
+      break;
+    }
+  }
+
+  perl_mongo_serialize_string(buf, flags, strlen(flags));
+}
+
 
 void
 perl_mongo_sv_to_bson (buffer *buf, SV *sv, AV *ids)

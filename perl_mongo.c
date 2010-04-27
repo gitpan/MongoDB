@@ -294,6 +294,8 @@ elem_to_sv (int type, buffer *buf)
     // this makes a copy of the buffer
     // len includes \0
     value = newSVpvn(buf->pos, len-1);
+    //    value = newSVpvn_utf8(buf->pos, len-1, 1);
+    //SvFLAGS(value) |= SVf_UTF8;
     SvUTF8_on(value);
 
     buf->pos += len; 

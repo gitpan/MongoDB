@@ -3,7 +3,7 @@
 
 =head1 NAME
 
-MongoDB::DataTypes - the data types used with MongoDB
+MongoDB::DataTypes - The data types used with MongoDB
 
 =head1 DESCRIPTION
 
@@ -32,12 +32,14 @@ You can see in the output:
 
     "\x{c5}land Islands"
 
-Lovely, isn't it?  This is how Perl prints UTF-8.  To make it "pretty," you can
-do one of two things:
+Lovely, isn't it?  This is how Perl prints UTF-8.  To make it "pretty," there
+are a couple options:
 
     my $pretty_str = utf8::encode($str);
 
-which, unintuitively, clears the UTF-8 flag.  You can also just run
+This, unintuitively, clears the UTF-8 flag.  
+
+You can also just run
 
     binmode STDOUT, ':utf8';
 
@@ -65,6 +67,10 @@ An example of querying for a range of dates:
 
     my $cursor = $collection->query({event => {'$gt' => $start, '$lt' => $end}});
 
+B<Warning: creating L<DateTime> objects is extremely slow.  Consider saving 
+dates as numbers and converting the numbers to L<DateTime>s when needed.  A single
+L<DateTime> field can make deserialization up to 10 times slower.>
+
 =head2 Regular Expressions
 
 Use C<qr/.../> to use a regular expression in a query:
@@ -86,7 +92,7 @@ from the database (this does not affect queries or Perl 5.10+).
 
 =head2 Booleans
 
-Use the L<boolean> pachage to get boolean values.  C<boolean::true> and 
+Use the L<boolean> package to get boolean values.  C<boolean::true> and 
 C<boolean::false> are the only parts of the package used, currently.
 
 An example of inserting boolean values:
@@ -125,6 +131,7 @@ Numbers that are saved as 64-bit integers will be decoded as doubles.
 =head3 64-bit Platforms
 
 Numbers without a decimal point will be saved and returned as 64-bit integers.
+Note that there is no way to save a 32-bit int on a 64-bit machine.  
 
 Keep in mind that this can cause some weirdness to ensue if some machines are
 32-bit and others are 64-bit.  Take the following example:
@@ -133,15 +140,38 @@ Keep in mind that this can cause some weirdness to ensue if some machines are
 
 =item * Programmer 1 saves an int on a 32-bit platform.
 
-=item * Programmer 2 retrieves the document on a 64-bit platform and re-saves it,
-effectively converting it to a 64-bit int.
+=item * Programmer 2 retrieves the document on a 64-bit platform and re-saves
+it, effectively converting it to a 64-bit int.
 
-=item * Programmer 1 retrieves the document on their 32-bit machine, which decodes the
-64-bit int as a double.
+=item * Programmer 1 retrieves the document on their 32-bit machine, which 
+decodes the 64-bit int as a double.
 
 =back
 
 Nothing drastic, but good to be aware of.
+
+=head4 64-bit integers in the shell
+
+The Mongo shell has one numeric type: the 8-byte float.  This means that it 
+cannot always represent an 8-byte integer exactly.  Thus, when you display a
+64-bit integer in the shell, it will be wrapped in a subobject that indicates
+it might be an approximate value.  For instance, if we run this Perl on a 
+64-bit machine:
+
+    $coll->insert({_id => 1});
+
+then look at it in the shell, we see:
+
+    > db.whatever.findOne()
+    {
+        "_id" : 
+            {
+                "floatApprox" : 1
+            }
+    }
+
+This doesn't mean that we saved a float, it just means that the float value of 
+a 64-bit integer may not be exact.
 
 =head2 MongoDB::OID
 
@@ -181,7 +211,7 @@ is worth experimenting.
 
 =head2 MongoDB::Code
 
-C<MongoDB::Code> is used to represent JavaScript code and, optionally, scope.
+L<MongoDB::Code> is used to represent JavaScript code and, optionally, scope.
 To create one:
 
     use MongoDB::Code;
@@ -191,26 +221,26 @@ To create one:
 Or, with a scope:
 
     my $code = MongoDB::Code->new("code" => "function() { return 'hello, '+name; }",
-        "scope" => "Fred");
+        "scope" => {"name" => "Fred"});
 
 Which would then return "hello, Fred" when run.
 
 =head2 MongoDB::MinKey
 
-MongoDB::MinKey is "less than" any other value of any type.  This can be useful
+C<MongoDB::MinKey> is "less than" any other value of any type.  This can be useful
 for always returning certain documents first (or last).
 
-MongoDB::MinKey has no methods, fields, or string form.  To create one, it is
+C<MongoDB::MinKey> has no methods, fields, or string form.  To create one, it is
 sufficient to say:
 
     bless $minKey, "MongoDB::MinKey";
 
 =head2 MongoDB::MaxKey
 
-MongoDB::MaxKey is "greater than" any other value of any type.  This can be useful
+C<MongoDB::MaxKey> is "greater than" any other value of any type.  This can be useful
 for always returning certain documents last (or first).
 
-MongoDB::MaxKey has no methods, fields, or string form.  To create one, it is
+C<MongoDB::MaxKey> has no methods, fields, or string form.  To create one, it is
 sufficient to say:
 
     bless $minKey, "MongoDB::MaxKey";

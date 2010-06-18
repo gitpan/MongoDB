@@ -7,6 +7,7 @@ use MongoDB;
 use MongoDB::OID;
 use MongoDB::Code;
 use DateTime;
+use JSON;
 
 my $conn;
 eval {
@@ -172,14 +173,11 @@ isa_ok($x->{max}, 'MongoDB::MaxKey');
     $result = $coll->find_one;
     is($result->{'x'}, 2712631400);
 
-    my $aok = 1;
     eval {
         my $ok = $coll->save({x => 9834590149023841902384137418571984503});
-        my $aok = 0;
     };
 
     ok($@ =~ m/BigInt is too large/);
-    ok($aok);
 
     $coll->remove;
 }
@@ -227,6 +225,18 @@ SKIP: {
     $coll->update({ x => 1 }, { '$inc' => { 'y' => 19401194714 } }, { 'upsert' => 1 });
     my $result = $coll->find_one;
     is($result->{'y'},19401194714,'64 bit ints without Math::BigInt');
+}
+
+# oid json
+{
+    my $doc = {"foo" => MongoDB::OID->new};
+
+    my $j = JSON->new;
+    $j->allow_blessed;
+    $j->convert_blessed;
+
+    my $json = $j->encode($doc);
+    is($json, '{"foo":{"$oid":"'.$doc->{'foo'}->value.'"}}');
 }
 
 END {

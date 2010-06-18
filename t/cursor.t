@@ -19,7 +19,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 56;
+    plan tests => 62;
 }
 
 my $db = $conn->get_database('test_database');
@@ -132,14 +132,14 @@ is(int $paging->has_next, 0);
 
 my $collection = $db->get_collection('test');
 $collection->drop;
-$collection->ensure_index(['sn']);
+$collection->ensure_index({'sn'=>1});
 
 my $sn = 0;
 while ($sn <= 500) {
   $collection->insert({sn => $sn++});
 }
 
-$cursor = $collection->query();
+$cursor = $collection->query;
 my $count = 0;
 while (my $doc = $cursor->next()) {
     $count++;
@@ -187,7 +187,7 @@ ok($@ =~ m/bad hint/);
 $MongoDB::Cursor::slave_okay = 1;
 $cursor = $collection->query->next;
 
-$MongoDB::Cursor::slave_okay = "invalid";
+$MongoDB::Cursor::slave_okay = 0;
 $cursor = $collection->query->next;
 
 $collection->drop;
@@ -202,6 +202,28 @@ is($coll->query({'x' => 1})->count, 3, 'count query');
 is($coll->query->limit(1)->count(1), 1, 'count limit');
 is($coll->query->skip(1)->count(1), 3, 'count skip');
 is($coll->query->limit(1)->skip(1)->count(1), 1, 'count limit & skip');
+
+# cursor opts
+# not a functional test, just make sure they don't blow up
+{
+    my $cursor = $coll->find();
+
+    $cursor->tailable(1);
+    is($cursor->tailable, 1);
+    $cursor->tailable(0);
+    is($cursor->tailable, 0);
+
+    $cursor->immortal(1);
+    is($cursor->immortal, 1);
+    $cursor->immortal(0);
+    is($cursor->immortal, 0);
+
+    $cursor->slave_okay(1);
+    is($cursor->slave_okay, 1);
+    $cursor->slave_okay(0);
+    is($cursor->slave_okay, 0);
+}
+
 
 END {
     if ($db) {

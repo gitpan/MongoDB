@@ -31,11 +31,21 @@ Table
 
 Record or row
 
-=item C<MongoDB::OID>
+=item L<MongoDB::OID>
 
 Autoincrementing primary key
 
 =back
+
+=head1 PREAMBLE
+
+The MongoDB package load L<MongoDB::Connection>, L<MongoDB::Database>, 
+L<MongoDB::Collection>, and L<MongoDB::Cursor>.  To use special Mongo data types
+(see L<MongoDB::DataTypes>), you have to include them separately.  So, usually,
+to use Mongo, you'll start with at least:
+
+    use MongoDB;
+    use MongoDB::OID;
 
 =head1 CONNECTING
 
@@ -49,12 +59,12 @@ Now we're connected to the database server.  Next we need a database to work
 with, we'll call it "tutorial".  You need not do anything special to create the 
 database, Mongo will create it on the fly.
 
-    my $db = $conn->get_database("tutorial");
+    my $db = $conn->tutorial;
 
 The last part of the preliminary setup is to choose a collection.  We'll be 
 using the "users" collection to start out.
 
-    my $users = $db->get_collection("users");
+    my $users = $db->users;
 
 Again, there is no need to create the collection in advance, it will be created
 as needed.
@@ -66,7 +76,7 @@ as needed.
 =head3 Inserting
 
 To add a document to the collection, we use the C<insert> function.  It takes a
-hash, which it saves to the collection.
+hash which is saved to the collection.
 
     $users->insert({"name" => "Joe", 
         "age" => 52, 
@@ -74,17 +84,17 @@ hash, which it saves to the collection.
 
 Now there is a user in the collection.  
 
-=head3 C<MongoDB::OID>s
+=head3 L<MongoDB::OID>s
 
-When a document is inserted, it is given an _id field if one does not already
+When a document is inserted, it is given a C<_id> field if one does not already
 exist.  By default, this field is a L<MongoDB::OID>, 12 bytes that are 
-guaranteed to be unique. The _id field of the inserted document is returned by
-the C<insert> method.
+guaranteed to be unique. The C<_id> field of the inserted document is returned 
+by the C<insert> method.
 
     my $id = $users->insert({"name" => "Bill"});
 
 An efficient way to insert documents is to send many at a time to the database
-by using C<batch_insert>, which returns an array of the _id fields of the 
+by using C<batch_insert>, which returns an array of the C<_id> fields of the 
 documents inserted.
 
     @ids = $users->batch_insert(\@fifty_users);
@@ -94,20 +104,30 @@ documents inserted.
 
 =head3 Queries
 
-To retrive documents that were saved to a collection, we can use the C<query> 
+To retrive documents that were saved to a collection, we can use the C<find> 
 method.
 
-    my $all_users = $users->query;
+    my $all_users = $users->find;
 
 To query for certain criteria, say, all users named Joe, pass the query a hash 
 with the key/value pair you wish to match:
 
-    my $some_users = $users->query({"name" => "Joe"});
+    my $some_users = $users->find({"name" => "Joe"});
 
 You can match array elements in your querys; for example, to find all users who
 like math:
 
-    my $geeks = $users->query({"likes" => "math"});
+    my $geeks = $users->find({"likes" => "math"});
+
+=head3
+
+This being Perl, it is important to mention that you can also use regular 
+expressions to search for strings.  If you wanted to find all users with the
+name John and all variations of said name, you could do:
+
+    my $john = $users->find({"name" => qr/joh?n/i});
+
+See L<MongoDB::DataTypes/"Regular Expressions"> for more information.
 
 =head3 Ranges
 
@@ -223,7 +243,7 @@ with $db->run_command. For example, to drop a collection, you can use:
     $db->run_command({drop => $collection_name});
 
 "drop" only requires one key/value pair, but for commands that require multiple 
-fields, Mongo expects key/value pairs to be in a certain order. It will no 
+fields, Mongo expects key/value pairs to be in a certain order. It will not 
 recognize the command if they are not ordered command name first. Thus, if you
 are running a database command, you should probably use L<Tie::IxHash> instead of a
 normal hash (normal hashes are not ordered).

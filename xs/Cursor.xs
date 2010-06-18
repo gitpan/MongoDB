@@ -17,78 +17,17 @@
 #include "perl_mongo.h"
 #include "mongo_link.h"
 
-extern int request_id;
-
 static mongo_cursor* get_cursor(SV *self);
 static int has_next(SV *self, mongo_cursor *cursor);
 static void kill_cursor(SV *self);
 
 static mongo_cursor* get_cursor(SV *self) {
-  SV *link, *slave_okay, *skip, *limit,
-     *query, *fields, *ns, *started_iterating;
-  mongo_cursor *cursor;
-  buffer buf;
-  mongo_msg_header header;
-  int sent, opts = 0;
-
-  cursor = (mongo_cursor*)perl_mongo_get_ptr_from_instance(self);
-
-  started_iterating = perl_mongo_call_reader (self, "started_iterating");
-
-  // if so, get the cursor
-  if (SvIV(started_iterating)) {
-    SvREFCNT_dec(started_iterating);
-    return cursor;
-  }
-  SvREFCNT_dec(started_iterating);
-
-  link = perl_mongo_call_reader (self, "_connection");
-  ns = perl_mongo_call_reader (self, "_ns");
-  skip = perl_mongo_call_reader (self, "_skip");
-  limit = perl_mongo_call_reader (self, "_limit");
-  query = perl_mongo_call_reader (self, "_query");
-  fields = perl_mongo_call_reader (self, "_fields");
-
-  slave_okay = get_sv ("MongoDB::Cursor::slave_okay", GV_ADD);
-  opts = SvTRUE(slave_okay) ? 1 << 2 : 0;
-
-  // if not, execute the query
-  CREATE_BUF(INITIAL_BUF_SIZE);
-  CREATE_HEADER_WITH_OPTS(buf, SvPV_nolen(ns), OP_QUERY, opts);
-  perl_mongo_serialize_int(&buf, SvIV(skip));
-  perl_mongo_serialize_int(&buf, SvIV(limit));
-  perl_mongo_sv_to_bson(&buf, query, NO_PREP);
-  if (SvROK(fields)) {
-    perl_mongo_sv_to_bson(&buf, fields, NO_PREP);
-  }
-
-  perl_mongo_serialize_size(buf.start, &buf);
-
-  SvREFCNT_dec(ns);
-  SvREFCNT_dec(query);
-  SvREFCNT_dec(fields);
-  SvREFCNT_dec(limit);
-  SvREFCNT_dec(skip);
-
-  // sends
-  sent = mongo_link_say(link, &buf);
-  Safefree(buf.start);
-  if (sent == -1) {
-    SvREFCNT_dec(link);
-    croak("couldn't send query.");
-  }
-
-  mongo_link_hear(self);
-
-  started_iterating = perl_mongo_call_method (self, "started_iterating", 1, sv_2mortal(newSViv(1)));
-  SvREFCNT_dec(started_iterating);
-  SvREFCNT_dec(link);
-
-  return cursor;
+  perl_mongo_call_method(self, "_do_query", 0);
+  return (mongo_cursor*)perl_mongo_get_ptr_from_instance(self);
 }
 
 static int has_next(SV *self, mongo_cursor *cursor) {
-  SV *link, *limit, *ns;
+  SV *link, *limit, *ns, *request_id, *response_to;
   mongo_msg_header header;
   buffer buf;
   int size, heard;
@@ -116,7 +55,15 @@ static int has_next(SV *self, mongo_cursor *cursor) {
   buf.pos = buf.start;
   buf.end = buf.start + size;
 
-  CREATE_RESPONSE_HEADER(buf, SvPV_nolen(ns), cursor->header.request_id, OP_GET_MORE);
+  response_to = perl_mongo_call_reader(self, "_request_id");
+  request_id = get_sv("MongoDB::Cursor::_request_id", GV_ADD);
+
+  CREATE_RESPONSE_HEADER(buf, SvPV_nolen(ns), SvIV(response_to), OP_GET_MORE);
+
+  // change this cursor's request id so we can match the response
+  perl_mongo_call_method(self, "_request_id", 1, request_id);
+  SvREFCNT_dec(response_to);
+
   perl_mongo_serialize_int(&buf, SvIV(limit));
   perl_mongo_serialize_long(&buf, cursor->cursor_id);
   perl_mongo_serialize_size(buf.start, &buf);
@@ -146,6 +93,7 @@ static int has_next(SV *self, mongo_cursor *cursor) {
 static void kill_cursor(SV *self) {
   mongo_cursor *cursor = (mongo_cursor*)perl_mongo_get_ptr_from_instance(self);
   SV *link = perl_mongo_call_reader (self, "_connection");
+  SV *request_id_sv = perl_mongo_call_reader (self, "_request_id");
   char quickbuf[128];
   buffer buf;
   mongo_msg_header header;
@@ -156,6 +104,7 @@ static void kill_cursor(SV *self) {
   // non-cursors have ids of 0
   if (cursor->cursor_id == 0) {
     SvREFCNT_dec(link);
+    SvREFCNT_dec(request_id_sv);
     return;
   }
   buf.pos = quickbuf;
@@ -163,7 +112,8 @@ static void kill_cursor(SV *self) {
   buf.end = buf.start + 128;
 
   // std header
-  CREATE_MSG_HEADER(cursor->header.request_id++, 0, OP_KILL_CURSORS);
+  CREATE_MSG_HEADER(SvIV(request_id_sv), 0, OP_KILL_CURSORS);
+  SvREFCNT_dec(request_id_sv);
   APPEND_HEADER(buf, 0);
 
   // # of cursors

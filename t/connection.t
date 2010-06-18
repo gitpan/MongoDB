@@ -18,7 +18,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 16;
+    plan tests => 18;
 }
 
 throws_ok {
@@ -78,23 +78,25 @@ SKIP: {
     $conn->wtimeout(100);
     is($conn->wtimeout, 100, "set wtimeout");
 
-    my $admin = $conn->get_database('admin');
-    my $buildinfo = $admin->run_command({buildinfo => 1});
-    skip "w won't work with db version $buildinfo->{version}", 1 if $buildinfo->{version} =~ /(0\.\d+\.\d+)|(1\.[1234]\d*.\d+)/;
-
-    my $coll = $db->get_collection('test_collection');
-    my $ret;
-    eval {
-        $ret = $coll->insert({ foo => 42 }, {safe => 1});
-    };
-
-    if ($@) {
-        ok($@ =~ /timed out/, "w timeout");
-    }
-    else {
-        ok(0);
-    }
-
     $db->drop;
 }
 
+# autoload
+{
+    my $db1 = $conn->foo;
+    is($db1->name, "foo");
+}
+
+# query_timeout
+{
+    my $timeout = $MongoDB::Cursor::timeout;
+
+    my $conn2 = MongoDB::Connection->new(auto_connect => 0);
+    is($conn2->query_timeout, $timeout, 'query timeout');
+
+    $MongoDB::Cursor::timeout = 40;
+    $conn2 = MongoDB::Connection->new(auto_connect => 0);
+    is($conn2->query_timeout, 40, 'query timeout');
+
+    $MongoDB::Cursor::timeout = $timeout;
+}

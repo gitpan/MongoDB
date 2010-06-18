@@ -26,6 +26,7 @@ test_requires 'boolean';
 test_requires 'Data::Types';
 test_requires 'File::Slurp';
 test_requires 'FileHandle';
+test_requires 'JSON';
 
 mongo;
 
@@ -36,7 +37,7 @@ repository 'git://github.com/mongodb/mongo-perl-driver.git';
 WriteAll;
 
 package MY;
-our $VERSION = '0.33';
+our $VERSION = '0.34';
 
 use Config;
 

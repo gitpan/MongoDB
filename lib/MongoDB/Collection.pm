@@ -15,13 +15,28 @@
 #
 
 package MongoDB::Collection;
-our $VERSION = '0.33';
+our $VERSION = '0.34';
 
 # ABSTRACT: A Mongo Collection
 
 =head1 NAME
 
-MongoDB::Collection - A Mongo Collection
+MongoDB::Collection - A Mongo collection
+
+=head1 SYNOPSIS
+
+An instance of a MongoDB collection.
+
+    # gets the foo collection
+    my $collection = $db->foo;
+
+Collection names can be chained together to access subcollections.  For 
+instance, the collection C<foo.bar> can be accessed with:
+
+    my $collection = $db->foo->bar;
+
+You can also access collections with the L<MongoDB::Database/get_collection> 
+method.
 
 =head1 SEE ALSO
 
@@ -37,7 +52,6 @@ has _database => (
     is       => 'ro',
     isa      => 'MongoDB::Database',
     required => 1,
-    handles  => [qw/query find_one insert update remove ensure_index batch_insert find/],
 );
 
 =head1 ATTRIBUTES
@@ -73,6 +87,17 @@ sub _build_full_name {
     my $name    = $self->name;
     my $db_name = $self->_database->name;
     return "${db_name}.${name}";
+}
+
+
+sub AUTOLOAD {
+    my $self = shift @_;
+    our $AUTOLOAD;
+
+    my $coll = $AUTOLOAD;
+    $coll =~ s/.*:://;
+
+    return $self->_database->get_collection($self->name.'.'.$coll);
 }
 
 =head1 STATIC METHODS
@@ -162,6 +187,44 @@ Order results.
 
 =back
 
+=cut
+
+sub find {
+    my ($self, $query, $attrs) = @_;
+    # old school options - these should be set with MongoDB::Cursor methods
+    my ($limit, $skip, $sort_by) = @{ $attrs || {} }{qw/limit skip sort_by/};
+
+    $limit   ||= 0;
+    $skip    ||= 0;
+
+    my $q = {};
+    if ($sort_by) {
+        $q->{'query'} = $query;
+	$q->{'orderby'} = $sort_by;
+    }
+    else {
+        $q = $query ? $query : {};
+    }
+
+    my $conn = $self->_database->_connection;
+    my $ns = $self->full_name;
+    my $cursor = MongoDB::Cursor->new(
+	_connection => $conn,
+	_ns => $ns, 
+	_query => $q, 
+	_limit => $limit, 
+	_skip => $skip
+    );
+    $cursor->_init;
+    return $cursor;
+}
+
+sub query {
+    my ($self, $query, $attrs) = @_;
+
+    return $self->find($query, $attrs);
+}
+
 =head2 find_one ($query, $fields?)
 
     my $object = $collection->find_one({ name => 'Resi' });
@@ -172,6 +235,17 @@ C<$query> can be a hash reference, L<Tie::IxHash>, or array reference (with an
 even number of elements).  If C<$fields> is specified, the resulting document 
 will only include the fields given (and the C<_id> field) which can cut down on
 wire traffic.
+
+=cut
+
+sub find_one {
+    my ($self, $query, $fields) = @_;
+    $query ||= {};
+    $fields ||= {};
+
+    return $self->find($query)->limit(-1)->fields($fields)->next;
+}
+
 
 =head2 insert ($object, $options?)
 
@@ -190,6 +264,15 @@ the reason that the insert failed.
 
 See also core documentation on insert: L<http://dochub.mongodb.org/core/insert>.
 
+=cut
+
+sub insert {
+    my ($self, $object, $options) = @_;
+    my ($id) = $self->batch_insert([$object], $options);
+
+    return $id;
+}
+
 =head2 batch_insert (\@array, $options)
 
     my @ids = $collection->batch_insert([{name => "Joe"}, {name => "Fred"}, {name => "Sam"}]);
@@ -201,6 +284,32 @@ The optional C<$options> parameter can be used to specify if this is a safe
 insert.  A safe insert will check with the database if the insert succeeded and
 return 0 if it did not.  You should check C<$MongoDB::Database::last_error> to see
 the reason that the insert failed.
+
+=cut
+
+sub batch_insert {
+    my ($self, $object, $options) = @_;
+    confess 'not an array reference' unless ref $object eq 'ARRAY';
+
+     my $ns = $self->full_name;
+     my ($insert, $ids) = MongoDB::write_insert($ns, $object);
+
+     my $conn = $self->_database->_connection;
+
+     if (defined($options) && $options->{safe}) {
+         my $ok = $self->_make_safe($insert);
+        
+         if (!$ok) {
+             return 0;
+         }
+     }
+     else {
+         $conn->send($insert);
+     }
+    
+     return @$ids;
+}
+
 
 =head2 update (\%criteria, \%object, \%options?)
 
@@ -231,6 +340,43 @@ check C<MongoDB::Database::last_error> to find out why the update failed.
 
 See also core documentation on update: L<http://dochub.mongodb.org/core/update>.
 
+=cut
+
+sub update {
+    my ($self, $query, $object, $opts) = @_;
+
+    # there used to be one option: upsert=0/1
+    # now there are two, there will probably be
+    # more in the future.  So, to support old code,
+    # passing "1" will still be supported, but not
+    # documentd, so we can phase that out eventually.
+    #
+    # The preferred way of passing options will be a
+    # hash of {optname=>value, ...}
+    my $flags = 0;
+    if ($opts && ref $opts eq 'HASH') {
+        $flags |= $opts->{'upsert'} << 0
+            if exists $opts->{'upsert'};
+        $flags |= $opts->{'multiple'} << 1
+            if exists $opts->{'multiple'};
+    }
+    else {
+        $flags = !(!$opts);
+    }
+
+    my $conn = $self->_database->_connection;
+    my $ns = $self->full_name;
+
+    if ($opts->{safe}) {
+        return $self->_make_safe(MongoDB::write_update($ns, $query, $object, $flags));
+    }
+
+    $conn->send(MongoDB::write_update($ns, $query, $object, $flags));
+
+    return 1;
+}
+
+
 =head2 remove ($query?, $options?)
 
     $collection->remove({ answer => { '$ne' => 42 } });
@@ -257,6 +403,33 @@ check C<MongoDB::Database::last_error> to find out why the update failed.
 
 See also core documentation on remove: L<http://dochub.mongodb.org/core/remove>.
 
+=cut
+
+sub remove {
+    my ($self, $query, $options) = @_;
+    my $just_one;
+    my $conn = $self->_database->_connection;
+    my $ns = $self->full_name;
+
+    $query ||= {};
+
+    if (defined $options && ref $options eq 'HASH') {
+        $just_one = exists $options->{just_one} ? $options->{just_one} : 0;
+
+        if ($options->{safe}) {
+            my $ok = $self->_make_safe(MongoDB::write_remove($ns, $query, $just_one));
+            return $ok;
+        }
+    }
+    else { 
+        $just_one = $options || 0;
+    }
+
+    $conn->send(MongoDB::write_remove($ns, $query, $just_one));
+
+    return 1;
+}
+
 =head2 ensure_index ($keys, $options?)
 
     use boolean;
@@ -273,14 +446,72 @@ See the L<MongoDB::Indexing> pod for more information on indexing.
 
 =cut
 
-around qw/query find_one insert update remove ensure_index batch_insert find/ => sub {
-    my ($next, $self, @args) = @_;
-    return $self->$next($self->_query_ns, @args);
-};
+sub ensure_index {
+    my ($self, $keys, $options, $garbage) = @_;
+    my $ns = $self->full_name;
 
-sub _query_ns {
-    my ($self) = @_;
-    return $self->name;
+    # we need to use the crappy old api if...
+    #  - $options isn't a hash, it's a string like "ascending"
+    #  - $keys is a one-element array: [foo]
+    #  - $keys is an array with more than one element and the second 
+    #    element isn't a direction (or at least a good one)
+    #  - Tie::IxHash has values like "ascending"
+    if (($options && ref $options ne 'HASH') ||
+        (ref $keys eq 'ARRAY' && 
+         ($#$keys == 0 || $#$keys >= 1 && !($keys->[1] =~ /-?1/))) ||
+        (ref $keys eq 'Tie::IxHash' && $keys->[2][0] =~ /(de)|(a)scending/)) {
+        Carp::croak("you're using the old ensure_index format, please upgrade");
+    }
+
+    my $obj = Tie::IxHash->new("ns" => $ns, "key" => $keys);
+
+    if (exists $options->{name}) {
+        $obj->Push("name" => $options->{name});
+    }
+    else {
+        $obj->Push("name" => MongoDB::Collection::to_index_string($keys));
+    }
+
+    if (exists $options->{unique}) {
+        $obj->Push("unique" => ($options->{unique} ? boolean::true : boolean::false));
+    }
+    if (exists $options->{drop_dups}) {
+        $obj->Push("dropDups" => ($options->{drop_dups} ? boolean::true : boolean::false));
+    }
+
+    my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;
+
+    my $indexes = $self->_database->get_collection("system.indexes");
+    return $indexes->insert($obj, $options);
+}
+
+
+sub _make_safe {
+    my ($self, $req) = @_;
+    my $conn = $self->_database->_connection;
+    my $db = $self->_database->name;
+
+    my $last_error = Tie::IxHash->new(getlasterror => 1, w => $conn->w, wtimeout => $conn->wtimeout);
+    my ($query, $info) = MongoDB::write_query($db.'.$cmd', 0, 0, -1, $last_error);
+
+    $conn->send("$req$query");
+
+    my $cursor = MongoDB::Cursor->new(_ns => $info->{ns}, _connection => $conn, _query => {});
+    $cursor->_init;
+    $cursor->_request_id($info->{'request_id'});
+
+    $conn->recv($cursor);
+
+    my $ok = $cursor->next();
+
+    # $ok->{ok} is 1 if err is set
+    Carp::croak $ok->{err} if $ok->{err};
+    # $ok->{ok} == 0 is still an error
+    if (!$ok->{ok}) {
+        Carp::croak $ok->{errmsg};
+    }
+
+    return 1;
 }
 
 =head2 save($doc, $options)
@@ -316,10 +547,10 @@ sub save {
     if (exists $doc->{"_id"}) {
 
         if (!$options || !ref $options eq 'HASH') {
-            $options->{'upsert'} = boolean::true;
+            $options = {"upsert" => boolean::true};
         }
         else {
-            $options = {"upsert" => boolean::true};
+            $options->{'upsert'} = boolean::true;
         }
 
         return $self->update({"_id" => $doc->{"_id"}}, $doc, $options);

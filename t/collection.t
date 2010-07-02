@@ -5,6 +5,7 @@ use Test::Exception;
 
 use Data::Types qw(:float);
 use Tie::IxHash;
+use Encode qw(encode decode);
 
 use MongoDB;
 
@@ -21,7 +22,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 117;
+    plan tests => 118;
 }
 
 my $db = $conn->get_database('test_database');
@@ -452,6 +453,29 @@ SKIP: {
     is($coll1->name, "bar.baz");
     is($coll1->full_name, "foo.bar.baz");
 }
+
+# ns hack
+# check insert utf8
+{
+    my $coll = $db->get_collection('test_collection');
+    $coll->drop;
+    # turn off utf8 flag now
+    $MongoDB::BSON::utf8_flag_on = 0;
+    $coll->insert({ foo => "\x{4e2d}\x{56fd}"});
+    $utfblah = $coll->find_one;
+    $coll->drop;
+    $coll->insert({foo2 => $utfblah->{foo}});
+    $utfblah = $coll->find_one;
+    # use utf8;
+    my $utfv2 = encode('utf8',"\x{4e2d}\x{56fd}");
+    # my $utfv2 = encode('utf8',"中国");
+    # diag(Dumper(\$utfv2));
+    is($utfblah->{foo2},$utfv2,'turn utf8 flag off,return perl internal form(bytes)');
+    # restore;
+    $MongoDB::BSON::utf8_flag_on = 1;
+    $coll->drop;
+}
+
 
 END {
     if ($db) {

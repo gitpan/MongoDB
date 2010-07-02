@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Collection;
-our $VERSION = '0.34';
+our $VERSION = '0.35';
 
 # ABSTRACT: A Mongo Collection
 
@@ -459,7 +459,7 @@ sub ensure_index {
     if (($options && ref $options ne 'HASH') ||
         (ref $keys eq 'ARRAY' && 
          ($#$keys == 0 || $#$keys >= 1 && !($keys->[1] =~ /-?1/))) ||
-        (ref $keys eq 'Tie::IxHash' && $keys->[2][0] =~ /(de)|(a)scending/)) {
+        (ref $keys eq 'Tie::IxHash' && $keys->[2][0] =~ /(de|a)scending/)) {
         Carp::croak("you're using the old ensure_index format, please upgrade");
     }
 
@@ -693,6 +693,8 @@ sub drop {
     $self->_database->run_command({ drop => $self->name });
     return;
 }
+
+
 
 no Any::Moose;
 __PACKAGE__->meta->make_immutable;

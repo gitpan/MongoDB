@@ -34,10 +34,17 @@ no_index directory => 'ext';
 
 repository 'git://github.com/mongodb/mongo-perl-driver.git';
 
+my @arch = $Config::Config{ccflags} =~ m/-arch\s+(\S+)/g;
+makemaker_args(
+    dynamic_lib => {
+        OTHERLDFLAGS => join '', map { " -arch $_ " } @arch
+    }
+);
+
 WriteAll;
 
 package MY;
-our $VERSION = '0.35';
+our $VERSION = '0.36';
 
 use Config;
 
@@ -58,6 +65,16 @@ sub const_cccmd {
     }
     else {
         $inherited .= ' ';
+    }
+
+    if ($Config{ccflags} =~ /-arch ppc/) {
+        $inherited .= ' -arch ppc';
+    }
+    if ($Config{ccflags} =~ /-arch i386/) {
+        $inherited .= ' -arch i386';
+    }
+    if ($Config{ccflags} =~ /-arch x86_64/) {
+        $inherited .= ' -arch x86_64';
     }
 
     return $inherited;

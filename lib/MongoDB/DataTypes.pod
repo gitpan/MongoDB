@@ -116,6 +116,9 @@ Most of the time, you can just use 1 or 0 instead of C<true> and C<false>, such
 as for specifying fields to return.  L<boolean> is the only way to save 
 booleans to the database, though.
 
+By default, booleans are returned from the database as integers.  To return 
+booleans as L<boolean>s, set C<$MongoDB::BSON::use_boolean> to 1.
+
 =head2 Numbers
 
 By default, numbers with a decimal point will be saved as doubles (64-bit).
@@ -250,4 +253,24 @@ C<MongoDB::MaxKey> has no methods, fields, or string form.  To create one, it is
 sufficient to say:
 
     bless $minKey, "MongoDB::MaxKey";
+
+=head2 MongoDB::Timestamp
+
+    my $ts = MongoDB::Timestamp->new({sec => $seconds, inc => $increment});
+
+Timestamps are used internally by MongoDB's replication.  You can see them in
+their natural habitat by querying C<local.main.$oplog>.  Each entry looks 
+something like:
+
+    { "ts" : { "t" : 1278872990000, "i" : 1 }, "op" : "n", "ns" : "", "o" : { } }
+
+In the shell, timestamps are shown in milliseconds, although they are stored as
+seconds.  So, to represent this document in Perl, we would do:
+
+    my $oplog = {
+        "ts" => MongoDB::Timestamp->new("sec" => 1278872990, "inc" => 1),
+        "op" => "n",
+        "ns" => "",
+        "o" => {}
+    }
 

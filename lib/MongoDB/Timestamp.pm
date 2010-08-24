@@ -14,14 +14,21 @@
 #  limitations under the License.
 #
 
-package MongoDB::Code;
+package MongoDB::Timestamp;
 our $VERSION = '0.36';
 
-# ABSTRACT: JavaScript Code
+# ABSTRACT: Replication timestamp
 
 =head1 NAME
 
-MongoDB::Code - JavaScript code
+MongoDB::Timestamp - Timestamp used for replication
+
+=head1 SYNOPSIS
+
+This is an internal type used for replication.  It is not for storing dates,
+times, or timestamps in the traditional sense.  Unless you are looking to mess
+with MongoDB's replication internals, the class you are probably looking for is
+L<DateTime>.  See <MongoDB::DataTypes> for more information.
 
 =cut
 
@@ -29,28 +36,28 @@ use Any::Moose;
 
 =head1 ATTRIBUTES
 
-=head2 code
+=head2 sec
 
-A string of JavaScript code.
+Seconds since epoch.
 
 =cut
 
-has code => (
+has sec => (
     is       => 'ro',
-    isa      => 'Str',
+    isa      => 'Int',
     required => 1,
 );
 
-=head2 scope
+=head2 inc
 
-An optional hash of variables to pass as the scope.
+Incrementing field.
 
 =cut
 
-has scope => (
+has inc => (
     is       => 'ro',
-    isa      => 'HashRef',
-    required => 0,
+    isa      => 'Int',
+    required => 1,
 );
 
 1;

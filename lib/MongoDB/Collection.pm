@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Collection;
-our $VERSION = '0.35';
+our $VERSION = '0.36';
 
 # ABSTRACT: A Mongo Collection
 
@@ -477,6 +477,9 @@ sub ensure_index {
     }
     if (exists $options->{drop_dups}) {
         $obj->Push("dropDups" => ($options->{drop_dups} ? boolean::true : boolean::false));
+    }
+    if (exists $options->{background}) {
+        $obj->Push("background" => ($options->{background} ? boolean::true : boolean::false));
     }
 
     my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;

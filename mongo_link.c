@@ -20,7 +20,6 @@
 static int mongo_link_sockaddr(struct sockaddr_in *addr, char *host, int port);
 static int mongo_link_reader(int socket, void *dest, int len);
 static void check_connection(SV *link_sv);
-inline void set_disconnected(SV *link_sv);
 
 /*
  * Returns -1 on failure, the socket fh on success.  
@@ -304,7 +303,8 @@ int mongo_link_hear(SV *cursor_sv) {
   SvREFCNT_dec(link_sv);
 
   cursor->flag = MONGO_32(cursor->flag);
-  if (cursor->flag == 0) {
+  // if zero-th bit is set, cursor is invalid
+  if (cursor->flag & 1) {
       cursor->num = 0;
       croak("cursor not found");
   }
@@ -368,7 +368,7 @@ static int mongo_link_reader(int socket, void *dest, int len) {
 /*
  * closes sockets and sets "connected" to 0
  */
-inline void set_disconnected(SV *link_sv) {
+void set_disconnected(SV *link_sv) {
   int i = 0;
   mongo_link *link;
 

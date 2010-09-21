@@ -345,6 +345,7 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_BOOL: {
+    dSP;
     char d = *buf->pos++;
     int count;
     SV *use_bool = get_sv("MongoDB::BSON::use_boolean", 0);
@@ -354,8 +355,6 @@ elem_to_sv (int type, buffer *buf)
       break;
     }
 
-    dSP;
-    
     SAVETMPS;
     
     PUSHMARK(SP);
@@ -714,7 +713,7 @@ void perl_mongo_serialize_key(buffer *buf, const char *str, int is_insert) {
     perl_mongo_resize_buf(buf, strlen(str)+1);
   }
 
-  if (strlen(str) == 0) {
+  if (str[0] == '\0') {
       croak("empty key name, did you use a $ with double quotes?");
   }
 

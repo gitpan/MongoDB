@@ -50,6 +50,14 @@ not be set when strings are decoded:
 
     $MongoDB::BSON::utf8_flag_on = 0;
 
+=head2 Arrays
+
+Arrays must be saved as array references (C<\@foo>, not C<@foo>).
+
+=head2 Embedded Documents
+
+Embedded documents are of the same form as top-level documents: either hash
+references or L<Tie::IxHash>s.  
 
 =head2 Dates
 
@@ -76,6 +84,12 @@ An example of querying for a range of dates:
 B<Warning: creating L<DateTime> objects is extremely slow.  Consider saving 
 dates as numbers and converting the numbers to L<DateTime>s when needed.  A single
 L<DateTime> field can make deserialization up to 10 times slower.>
+
+For example, you could use the L<time> function to store seconds since the epoch:
+
+    $collection->update($criteria, {'$set' => {"last modified" => time()}})
+
+This will be faster to deserialize.
 
 =head2 Regular Expressions
 

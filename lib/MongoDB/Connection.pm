@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.38';
+our $VERSION = '0.39';
 
 # ABSTRACT: A connection to a Mongo server
 
@@ -47,6 +47,11 @@ It can connect to a database server running anywhere, though:
     my $connection = MongoDB::Connection->new(host => 'example.com:12345');
 
 See the L</"host"> section for more options for connecting to MongoDB.
+
+=head2 Multithreading
+
+Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads 
+will have to create their own connections to the database.
 
 =head1 SEE ALSO
 

@@ -20,7 +20,7 @@ use warnings;
 package MongoDB;
 # ABSTRACT: A Mongo Driver for Perl
 
-our $VERSION = '0.39';
+our $VERSION = '0.40';
 
 use XSLoader;
 use MongoDB::Connection;
@@ -131,9 +131,9 @@ out of scope, the connection will automatically be closed and cleaned up.
 
 =head3 Class Hierarchy
 
-The classes are arranged in a heirarchy: you cannot create a 
+The classes are arranged in a hierarchy: you cannot create a 
 L<MongoDB::Collection> instance before you create L<MongoDB::Database> instance,
-for example.  The full heirarchy is:
+for example.  The full hierarchy is:
 
     MongoDB::Connection -> MongoDB::Database -> MongoDB::Collection
 

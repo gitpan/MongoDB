@@ -9,14 +9,14 @@ use File::Spec::Functions qw/catdir/;
 
 use vars qw{$VERSION @ISA};
 BEGIN {
-    $VERSION = '0.40';
+    $VERSION = '0.41';
     @ISA     = qw{Module::Install::Base};
 }
 
 # check for big-endian                                                                                                                                                                                                                
 my $endianess = $Config{byteorder};
 my $ccflags = "";
-if ($endianess == 4321) {
+if ($endianess == 4321 || $endianess == 87654321) {
     $ccflags = " -DMONGO_BIG_ENDIAN=1 ";
 }
 

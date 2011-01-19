@@ -21,6 +21,7 @@
 
 #ifdef WIN32
 #include <winsock2.h>
+#define socklen_t int
 #else
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -87,7 +88,7 @@
   perl_mongo_serialize_string(&buf, ns, strlen(ns));              
 
 #define CREATE_BUF(size)                                \
-  New(0, buf.start, size, char);                        \
+  Newx(buf.start, size, char);                          \
   buf.pos = buf.start;                                  \
   buf.end = buf.start + size;
 
@@ -150,7 +151,7 @@ typedef struct {
 
 int mongo_link_say(SV *self, buffer *buf);
 int mongo_link_hear(SV *self);
-int perl_mongo_master(SV *self);
+int perl_mongo_master(SV *self, int auto_reconnect);
 int perl_mongo_connect(char *host, int port, int timeout);
 void set_disconnected(SV *link_sv);
 

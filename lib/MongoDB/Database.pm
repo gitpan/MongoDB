@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Database;
-our $VERSION = '0.40';
+our $VERSION = '0.41';
 
 # ABSTRACT: A Mongo Database
 
@@ -185,6 +185,7 @@ previous operation was and if it succeeded or failed.  If the last operation
 =over 4
 
 =item C<err> will be set or
+
 =item C<errmsg> will be set and C<ok> will be 0.
 
 =back

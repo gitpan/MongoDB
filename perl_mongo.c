@@ -29,7 +29,20 @@ static void serialize_regex(buffer*, const char*, REGEXP*, int is_insert);
 static void serialize_regex_flags(buffer*, SV*);
 static void append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert);
 
-int perl_mongo_inc = 0;
+#ifdef USE_ITHREADS
+static perl_mutex inc_mutex;
+#endif
+
+static int perl_mongo_inc = 0;
+
+int perl_mongo_machine_id;
+
+#ifdef WIN32
+void
+perl_mongo_mutex_init() {
+  MUTEX_INIT(&inc_mutex);
+}
+#endif
 
 void
 perl_mongo_call_xs (pTHX_ void (*subaddr) (pTHX_ CV *), CV *cv, SV **mark)
@@ -74,12 +87,16 @@ perl_mongo_call_reader (SV *self, const char *reader)
 
 
 SV *
-perl_mongo_call_method (SV *self, const char *method, int num, ...)
+perl_mongo_call_method (SV *self, const char *method, I32 flags, int num, ...)
 {
     dSP;
-    SV *ret;
+    SV *ret = NULL;
     I32 count;
     va_list args;
+
+    if (flags & G_ARRAY) {
+        croak("perl_mongo_call_method doesn't support list context");
+    }
 
     ENTER;
     SAVETMPS;
@@ -88,25 +105,27 @@ perl_mongo_call_method (SV *self, const char *method, int num, ...)
     XPUSHs (self);
 
     va_start( args, num );
- 
+
     for( ; num > 0; num-- ) {
-      XPUSHs (va_arg( args, SV* ));
+        XPUSHs (va_arg( args, SV* ));
     }
- 
+
     va_end( args );
 
     PUTBACK;
 
-    count = call_method (method, G_SCALAR);
+    count = call_method (method, flags | G_SCALAR);
 
-    SPAGAIN;
+    if (!(flags & G_DISCARD)) {
+        SPAGAIN;
 
-    if (count != 1) {
-        croak ("method didn't return a value");
+        if (count != 1) {
+            croak ("method didn't return a value");
+        }
+
+        ret = POPs;
+        SvREFCNT_inc (ret);
     }
-
-    ret = POPs;
-    SvREFCNT_inc (ret);
 
     PUTBACK;
     FREETMPS;
@@ -158,22 +177,29 @@ perl_mongo_call_function (const char *func, int num, ...)
 
 
 void
-perl_mongo_attach_ptr_to_instance (SV *self, void *ptr)
-{
-    sv_magic (SvRV (self), 0, PERL_MAGIC_ext, (const char *)ptr, 0);
-}
-
-void *
-perl_mongo_get_ptr_from_instance (SV *self)
+perl_mongo_attach_ptr_to_instance (SV *self, void *ptr, MGVTBL *vtbl)
 {
     MAGIC *mg;
 
-    if (!self || !SvOK (self) || !SvROK (self)
-     || !(mg = mg_find (SvRV (self), PERL_MAGIC_ext))) {
-        croak ("invalid object");
+    mg = sv_magicext (SvRV (self), 0, PERL_MAGIC_ext, vtbl, (const char *)ptr, 0);
+    mg->mg_flags |= MGf_DUP;
+}
+
+void *
+perl_mongo_get_ptr_from_instance (SV *self, MGVTBL *vtbl)
+{
+    MAGIC *mg;
+
+    if (!self || !SvOK (self) || !SvROK (self) || !sv_isobject (self)) {
+	croak ("not an object");
     }
 
-    return mg->mg_ptr;
+    for (mg = SvMAGIC (SvRV (self)); mg; mg = mg->mg_moremagic) {
+	if (mg->mg_type == PERL_MAGIC_ext && mg->mg_virtual == vtbl)
+	    return mg->mg_ptr;
+    }
+
+    croak ("invalid object");
 }
 
 SV *
@@ -225,16 +251,16 @@ perl_mongo_construct_instance_va (const char *klass, va_list ap)
 }
 
 SV *
-perl_mongo_construct_instance_with_magic (const char *klass, void *ptr, ...)
+perl_mongo_construct_instance_with_magic (const char *klass, void *ptr, MGVTBL *vtbl, ...)
 {
     SV *ret;
     va_list ap;
 
-    va_start (ap, ptr);
+    va_start (ap, vtbl);
     ret = perl_mongo_construct_instance_va (klass, ap);
     va_end (ap);
 
-    perl_mongo_attach_ptr_to_instance (ret, ptr);
+    perl_mongo_attach_ptr_to_instance (ret, ptr, vtbl);
 
     return ret;
 }
@@ -266,7 +292,7 @@ oid_to_sv (buffer *buf)
     perl_mongo_make_oid(buf->pos, oid_s);
 
     id_hv = newHV();
-    hv_store(id_hv, "value", strlen("value"), newSVpvn(oid_s, 24), 0);
+    (void)hv_store(id_hv, "value", strlen("value"), newSVpvn(oid_s, 24), 0);
 
     stash = gv_stashpv("MongoDB::OID", 0);
     return sv_bless(newRV_noinc((SV *)id_hv), stash);
@@ -414,7 +440,10 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_REGEX: {
-    SV *pattern, *regex, *regex_ref;
+    SV *pattern, *regex_ref;
+#if PERL_REVISION==5 && PERL_VERSION<12
+    SV *regex;
+#endif
     HV *stash;
     U32 flags = 0;
     REGEXP *re;
@@ -505,7 +534,6 @@ elem_to_sv (int type, buffer *buf)
   case BSON_TIMESTAMP: {
     SV *sec_sv, *inc_sv;
     int sec, inc;
-    HV *hv = newHV();
 
     inc = MONGO_32(*(int*)buf->pos);
     buf->pos += INT_32;
@@ -612,7 +640,7 @@ void perl_mongo_serialize_byte(buffer *buf, char b) {
   buf->pos += 1;
 }
 
-void perl_mongo_serialize_bytes(buffer *buf, const char *str, int str_len) {
+void perl_mongo_serialize_bytes(buffer *buf, const char *str, unsigned int str_len) {
   if(BUF_REMAINING <= str_len) {
     perl_mongo_resize_buf(buf, str_len);
   }
@@ -620,7 +648,7 @@ void perl_mongo_serialize_bytes(buffer *buf, const char *str, int str_len) {
   buf->pos += str_len;
 }
 
-void perl_mongo_serialize_string(buffer *buf, const char *str, int str_len) {
+void perl_mongo_serialize_string(buffer *buf, const char *str, unsigned int str_len) {
   if(BUF_REMAINING <= str_len+1) {
     perl_mongo_resize_buf(buf, str_len+1);
   }
@@ -644,7 +672,7 @@ void perl_mongo_serialize_int(buffer *buf, int num) {
 
 void perl_mongo_serialize_long(buffer *buf, int64_t num) {
   int64_t i = MONGO_64(num);
-
+ 
   if(BUF_REMAINING <= INT_64) {
     perl_mongo_resize_buf(buf, INT_64);
   }
@@ -754,15 +782,24 @@ void perl_mongo_make_id(char *id) {
   // ...but if it's not, don't crash
   int pid = pid_s ? SvIV(pid_s) : rand();
 
-  int r1 = rand();
-  int inc = perl_mongo_inc++;
+  int inc;
+  unsigned t;
+  char *T, *M, *P, *I;
 
-  unsigned t = (unsigned) time(0);
+#ifdef USE_ITHREADS
+  MUTEX_LOCK(&inc_mutex);
+#endif
+  inc = perl_mongo_inc++;
+#ifdef USE_ITHREADS
+  MUTEX_UNLOCK(&inc_mutex);
+#endif
 
-  char *T = (char*)&t,
-    *M = (char*)&r1,
-    *P = (char*)&pid,
-    *I = (char*)&inc;
+  t = (unsigned) time(0);
+
+  T = (char*)&t;
+  M = (char*)&perl_mongo_machine_id;
+  P = (char*)&pid;
+  I = (char*)&inc;
 
 #if MONGO_BIG_ENDIAN
   memcpy(data, T, 4);
@@ -799,7 +836,7 @@ perl_mongo_prep(buffer *buf, AV *ids) {
 
   perl_mongo_make_oid(id_s, oid_s);
   id_hv = newHV();
-  hv_store(id_hv, "value", strlen("value"), newSVpvn(oid_s, 24), 0);
+  (void)hv_store(id_hv, "value", strlen("value"), newSVpvn(oid_s, 24), 0);
 
   id = sv_bless(newRV_noinc((SV *)id_hv), stash);
 
@@ -821,7 +858,7 @@ static stackette* check_circular_ref(void *ptr, stackette *stack) {
   }
 
   // push this onto the circular ref stack
-  New(0, ette, 1, stackette);
+  Newx(ette, 1, stackette);
   ette->ptr = ptr;
   // if stack has not been initialized, stack will be 0 so this will work out
   ette->prev = start;
@@ -835,6 +872,10 @@ hv_to_bson (buffer *buf, SV *sv, AV *ids, stackette *stack, int is_insert)
     int start;
     HE *he;
     HV *hv;
+
+    if (BUF_REMAINING <= 5) {
+      perl_mongo_resize_buf(buf, 5);
+    }
 
     /* keep a record of the starting position
      * as an offset, in case the memory is resized */
@@ -905,6 +946,10 @@ av_to_bson (buffer *buf, AV *av, stackette *stack, int is_insert)
         croak("circular ref");
     }
 
+    if (BUF_REMAINING <= 5) {
+      perl_mongo_resize_buf(buf, 5);
+    }
+
     start = buf->pos-buf->start;
     buf->pos += INT_32;
 
@@ -932,6 +977,10 @@ ixhash_to_bson(buffer *buf, SV *sv, AV *ids, stackette *stack, int is_insert) {
     SV **keys_sv, **values_sv;
     AV *array, *keys, *values;
     
+    if (BUF_REMAINING <= 5) {
+      perl_mongo_resize_buf(buf, 5);
+    }
+
     /* skip 4 bytes for size */
     start = buf->pos-buf->start;
     buf->pos += INT_32;
@@ -1112,8 +1161,7 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
                   big = big + temp;
                 }
                 else {
-                  STRLEN len;
-                  char *str = SvPV(*val, len);
+                  STRLEN len = sv_len(*val);
 
                   length += len;
                   big += ((int64_t)atoi(SvPV_nolen(*val))) * offset;
@@ -1149,9 +1197,9 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
               }
               SvREFCNT_dec (tz);
               SvREFCNT_dec (tz_name);
-              
+
               sec = perl_mongo_call_reader (sv, "epoch");
-              ms = perl_mongo_call_method (sv, "millisecond", 0);
+              ms = perl_mongo_call_method (sv, "millisecond", 0, 0);
 
               perl_mongo_serialize_long(buf, (int64_t)SvIV(sec)*1000+SvIV(ms));
 
@@ -1173,6 +1221,10 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
               set_type(buf, BSON_CODE);
               perl_mongo_serialize_key(buf, key, is_insert);
 
+              if (BUF_REMAINING <= INT_32) {
+                perl_mongo_resize_buf(buf, INT_32);
+              }
+
               start = buf->pos-buf->start;
               buf->pos += INT_32;
 
@@ -1181,7 +1233,7 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
               perl_mongo_serialize_int(buf, code_len+1);
               perl_mongo_serialize_string(buf, code_str, code_len);
 
-              scope = perl_mongo_call_method (sv, "scope", 0);
+              scope = perl_mongo_call_method (sv, "scope", 0, 0);
               hv_to_bson(buf, scope, NO_PREP, EMPTY_STACK, is_insert);
 
               perl_mongo_serialize_size(buf->start+start, buf);
@@ -1283,7 +1335,7 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
             case SVt_PVIV: 
             case SVt_PVLV:
             case SVt_PVMG: {
-              if (SvIOK(sv)) {
+              if (SvIOK(sv) || SvIOKp(sv)) {
 #if defined(USE_64_BIT_INT)
                 set_type(buf, BSON_LONG);
                 perl_mongo_serialize_key(buf, key, is_insert);
@@ -1334,10 +1386,18 @@ static void serialize_regex(buffer *buf, const char *key, REGEXP *re, int is_ins
 
 static void serialize_regex_flags(buffer *buf, SV *sv) {
   char flags[] = {0,0,0,0,0,0};
-  int i = 0, f = 0;
+  unsigned int i = 0, f = 0;
   STRLEN string_length;
   char *string = SvPV(sv, string_length);
-                
+
+  /* In order to work on newer versions of perl, this will also have to handle
+   * (?^...:..)  I'm not sure what to do with that though. In the interest of
+   * portability of data between perl versions, it'd make sense to just
+   * denormalise ^ into regular flags, but that kind of defeats the purpose of ^.
+   *
+   * Also, this doesn't cover all the flags available on recent perls, and nor
+   * does the matching deserialisation routine.
+   */
   for(i = 2; i < string_length && string[i] != '-'; i++) {
     if (string[i] == 'i' ||
         string[i] == 'm' ||
@@ -1386,6 +1446,11 @@ perl_mongo_sv_to_bson (buffer *buf, SV *sv, AV *ids)
             
             if ((av_len (av) % 2) == 0) {
                 croak ("odd number of elements in structure");
+            }
+
+            // this should never come up
+            if (BUF_REMAINING <= 5) {
+                perl_mongo_resize_buf(buf, 5);
             }
             
             start = buf->pos-buf->start;

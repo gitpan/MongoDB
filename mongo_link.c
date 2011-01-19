@@ -19,7 +19,6 @@
 
 static int mongo_link_sockaddr(struct sockaddr_in *addr, char *host, int port);
 static int mongo_link_reader(int socket, void *dest, int len);
-static void check_connection(SV *link_sv);
 
 /*
  * Returns -1 on failure, the socket fh on success.  
@@ -87,7 +86,7 @@ int perl_mongo_connect(char *host, int port, int timeout) {
   // connect
   status = connect(sock, (struct sockaddr*)&addr, sizeof(addr));
   if (status == -1) {
-    int size;
+    socklen_t size;
 
 #ifdef WIN32
     errno = WSAGetLastError();
@@ -156,7 +155,7 @@ static int mongo_link_sockaddr(struct sockaddr_in *addr, char *host, int port) {
 int mongo_link_say(SV *link_sv, buffer *buf) {
   int sock, sent;
 
-  if ((sock = perl_mongo_master(link_sv)) == -1) {
+  if ((sock = perl_mongo_master(link_sv, 1)) == -1) {
     return -1;
   }
   
@@ -173,10 +172,10 @@ int mongo_link_say(SV *link_sv, buffer *buf) {
 static int get_header(int sock, SV *cursor_sv, SV *link_sv) {
   mongo_cursor *cursor;
 
-  cursor = (mongo_cursor*)perl_mongo_get_ptr_from_instance(cursor_sv);
+  cursor = (mongo_cursor*)perl_mongo_get_ptr_from_instance(cursor_sv, &cursor_vtbl);
 
-  if (recv(sock, (char*)&cursor->header.length, INT_32, 0) == -1) {
-    SvREFCNT_dec(link_sv);
+  if (recv(sock, (char*)&cursor->header.length, INT_32, 0) != INT_32) {
+    set_disconnected(link_sv);
     return 0;
   }
 
@@ -190,9 +189,9 @@ static int get_header(int sock, SV *cursor_sv, SV *link_sv) {
     return 0;
   }
 
-  if (recv(sock, (char*)&cursor->header.request_id, INT_32, 0) == -1 ||
-      recv(sock, (char*)&cursor->header.response_to, INT_32, 0) == -1 ||
-      recv(sock, (char*)&cursor->header.op, INT_32, 0) == -1) {
+  if (recv(sock, (char*)&cursor->header.request_id, INT_32, 0) != INT_32 ||
+      recv(sock, (char*)&cursor->header.response_to, INT_32, 0) != INT_32 ||
+      recv(sock, (char*)&cursor->header.op, INT_32, 0) != INT_32) {
     return 0;
   }
 
@@ -214,12 +213,12 @@ int mongo_link_hear(SV *cursor_sv) {
   mongo_link *link;
   SV *link_sv, *request_id_sv, *timeout_sv;
 
-  cursor = (mongo_cursor*)perl_mongo_get_ptr_from_instance(cursor_sv);
+  cursor = (mongo_cursor*)perl_mongo_get_ptr_from_instance(cursor_sv, &cursor_vtbl);
   link_sv = perl_mongo_call_reader(cursor_sv, "_connection");
-  link = (mongo_link*)perl_mongo_get_ptr_from_instance(link_sv);
+  link = (mongo_link*)perl_mongo_get_ptr_from_instance(link_sv, &connection_vtbl);
   timeout_sv = perl_mongo_call_reader(link_sv, "query_timeout");
 
-  if ((sock = perl_mongo_master(link_sv)) == -1) {
+  if ((sock = perl_mongo_master(link_sv, 0)) == -1) {
     set_disconnected(link_sv);
     SvREFCNT_dec(link_sv);
     croak("can't get db response, not connected");
@@ -250,6 +249,7 @@ int mongo_link_hear(SV *cursor_sv) {
 
   if (get_header(sock, cursor_sv, link_sv) == 0) {
     SvREFCNT_dec(link_sv);
+    croak("can't get db response, not connected");
     return 0;
   }
 
@@ -318,7 +318,7 @@ int mongo_link_hear(SV *cursor_sv) {
 
   // point buf.start at buf's first char
   if (!cursor->buf.start) {
-    New(0, cursor->buf.start, cursor->header.length, char);
+    Newx(cursor->buf.start, cursor->header.length, char);
     cursor->buf.end = cursor->buf.start + cursor->header.length;
   }
   else if (cursor->buf.end - cursor->buf.start < cursor->header.length) { 
@@ -369,10 +369,9 @@ static int mongo_link_reader(int socket, void *dest, int len) {
  * closes sockets and sets "connected" to 0
  */
 void set_disconnected(SV *link_sv) {
-  int i = 0;
   mongo_link *link;
 
-  link = (mongo_link*)perl_mongo_get_ptr_from_instance(link_sv);
+  link = (mongo_link*)perl_mongo_get_ptr_from_instance(link_sv, &connection_vtbl);
 
   // check if there's nothing to do
   if (link->master == 0 || link->master->connected == 0) {
@@ -391,41 +390,38 @@ void set_disconnected(SV *link_sv) {
 
   // TODO: set $self->_master to 0?
   if (link->copy) {
-      SV *rubbish;
-
       link->master = 0;
-
-      rubbish = perl_mongo_call_method(link_sv, "_master", 1, sv_2mortal(newSViv(0)));
-      SvREFCNT_dec(rubbish);
+      perl_mongo_call_method(link_sv, "_master", G_DISCARD, 1, &PL_sv_no);
   }
 }
 
-int perl_mongo_master(SV *link_sv) {
+int perl_mongo_master(SV *link_sv, int auto_reconnect) {
   SV *master;
   mongo_link *link;
 
-  link = (mongo_link*)perl_mongo_get_ptr_from_instance(link_sv);
+  link = (mongo_link*)perl_mongo_get_ptr_from_instance(link_sv, &connection_vtbl);
 
   if (link->master && link->master->connected) {
       return link->master->socket;
   }
-  // if we didn't have a connection above and this isn't a connection holder 
+  // if we didn't have a connection above and this isn't a connection holder
   if (!link->copy) {
       // if this is a real connection, try to reconnect
-      if (link->auto_reconnect) {
-          SV *rubbish;
-          rubbish = perl_mongo_call_method(link_sv, "connect", 0);
-          SvREFCNT_dec(rubbish);
+      if (auto_reconnect && link->auto_reconnect) {
+          perl_mongo_call_method(link_sv, "connect", G_DISCARD, 0);
+          if (link->master && link->master->connected) {
+              return link->master->socket;
+          }
       }
 
       return -1;
   }
 
-  master = perl_mongo_call_method(link_sv, "get_master", 0);
+  master = perl_mongo_call_method(link_sv, "get_master", 0, 0);
   if (SvROK(master)) {
     mongo_link *m_link;
 
-    m_link = (mongo_link*)perl_mongo_get_ptr_from_instance(master);
+    m_link = (mongo_link*)perl_mongo_get_ptr_from_instance(master, &connection_vtbl);
     link->copy = 1;
     link->master = m_link->master;
 

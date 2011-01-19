@@ -15,7 +15,7 @@
 #
 
 package MongoDB::GridFS::File;
-our $VERSION = '0.40';
+our $VERSION = '0.41';
 
 # ABSTRACT: A Mongo GridFS file
 
@@ -133,12 +133,12 @@ given, the entire file is return.
 
 sub slurp {
     my ($self,$length,$offset) = @_;
-    my $bytes;
+    my $bytes = '';
     my $fh = new IO::File \$bytes,'+>';
     my $written = $self->print($fh,$length,$offset);
 
     # some machines don't set $bytes
-    if (!$bytes) {
+    if ($written and !length($bytes)) {
        my $retval;
        read $fh, $retval, $written;
        return $retval;

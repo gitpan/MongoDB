@@ -27,6 +27,11 @@ MODULE = MongoDB  PACKAGE = MongoDB
 PROTOTYPES: DISABLE
 
 BOOT:
+        if (items < 3)
+            croak("machine id required");
+
+        perl_mongo_machine_id = SvIV(ST(2));
+
 	PERL_MONGO_CALL_BOOT (boot_MongoDB__Connection);
 	PERL_MONGO_CALL_BOOT (boot_MongoDB__BSON);
 	PERL_MONGO_CALL_BOOT (boot_MongoDB__Cursor);
@@ -36,7 +41,9 @@ BOOT:
         gv_fetchpv("MongoDB::BSON::char",  GV_ADDMULTI, SVt_IV);
         gv_fetchpv("MongoDB::BSON::utf8_flag_on",  GV_ADDMULTI, SVt_IV);
         gv_fetchpv("MongoDB::BSON::use_boolean",  GV_ADDMULTI, SVt_IV);
-
+#ifdef WIN32
+        perl_mongo_mutex_init();
+#endif
 
 void
 write_query(ns, opts, skip, limit, query, fields = 0)

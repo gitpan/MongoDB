@@ -1,6 +1,7 @@
 ---
 abstract: 'Mongo Driver for Perl'
 author:
+  - 'Florian Ragwitz <rafl@debian.org>'
   - 'Kristina Chodorow <kristina@10gen.com>'
 build_requires:
   Data::Types: 0
@@ -35,8 +36,8 @@ requires:
   Tie::IxHash: 0
   XSLoader: 0
   boolean: 0
-  perl: 5.8.0
+  perl: 5.8.7
 resources:
   license: http://apache.org/licenses/LICENSE-2.0
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.40
+version: 0.41

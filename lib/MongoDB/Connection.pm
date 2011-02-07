@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Connection;
-our $VERSION = '0.41';
+our $VERSION = '0.42';
 
 # ABSTRACT: A connection to a Mongo server
 
@@ -735,7 +735,7 @@ C<$info> hash will be automatically created for you by L<MongoDB::write_query>.
 =cut
 
 no Any::Moose;
-__PACKAGE__->meta->make_immutable;
+__PACKAGE__->meta->make_immutable (inline_destructor => 0);
 
 1;
 

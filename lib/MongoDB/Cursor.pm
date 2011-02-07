@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Cursor;
-our $VERSION = '0.41';
+our $VERSION = '0.42';
 
 # ABSTRACT: A cursor/iterator for Mongo query results
 use Any::Moose;
@@ -485,7 +485,7 @@ sub all {
 }
 
 no Any::Moose;
-__PACKAGE__->meta->make_immutable;
+__PACKAGE__->meta->make_immutable (inline_destructor => 0);
 
 1;
 

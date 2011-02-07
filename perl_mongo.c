@@ -34,15 +34,12 @@ static perl_mutex inc_mutex;
 #endif
 
 static int perl_mongo_inc = 0;
-
 int perl_mongo_machine_id;
 
-#ifdef WIN32
 void
 perl_mongo_mutex_init() {
   MUTEX_INIT(&inc_mutex);
 }
-#endif
 
 void
 perl_mongo_call_xs (pTHX_ void (*subaddr) (pTHX_ CV *), CV *cv, SV **mark)
@@ -312,13 +309,10 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_DOUBLE: {
-    double d = *(double*)buf->pos;
-    int64_t i, *i_p;
-    i_p = &i;
+    int64_t i = MONGO_64p(buf->pos);
+    double d;
 
-    memcpy(i_p, &d, DOUBLE_64);
-    i = MONGO_64(i);
-    memcpy(&d, i_p, DOUBLE_64);
+    memcpy(&d, &i, DOUBLE_64);
  
     value = newSVnv(d);
     buf->pos += DOUBLE_64;
@@ -326,7 +320,7 @@ elem_to_sv (int type, buffer *buf)
   }
   case BSON_SYMBOL:
   case BSON_STRING: {
-    int len = MONGO_32(*((int*)buf->pos));
+    int len = MONGO_32p(buf->pos);
     buf->pos += INT_32;
 
     // this makes a copy of the buffer
@@ -349,7 +343,7 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_BINARY: {
-    int len = MONGO_32(*(int*)buf->pos);
+    int len = MONGO_32p(buf->pos);
     char type;
 
     buf->pos += INT_32;
@@ -358,7 +352,7 @@ elem_to_sv (int type, buffer *buf)
     type = *buf->pos++;
 
     if (type == 2) {
-      int len2 = MONGO_32(*(int*)buf->pos);
+      int len2 = MONGO_32p(buf->pos);
       if (len2 == len - 4) {
         len = len2;
         buf->pos += INT_32;
@@ -409,21 +403,21 @@ elem_to_sv (int type, buffer *buf)
     break;
   }
   case BSON_INT: {
-    value = newSViv(MONGO_32(*((int*)buf->pos)));
+    value = newSViv(MONGO_32p(buf->pos));
     buf->pos += INT_32;
     break;
   }
   case BSON_LONG: {
 #if defined(USE_64_BIT_INT)
-    value = newSViv(MONGO_64(*((int64_t*)buf->pos)));
+    value = newSViv(MONGO_64p(buf->pos));
 #else
-    value = newSVnv((double)MONGO_64(*((int64_t*)buf->pos)));
+    value = newSVnv((double)MONGO_64p(buf->pos));
 #endif
     buf->pos += INT_64;
     break;
   }
   case BSON_DATE: {
-    int64_t ms_i = MONGO_64(*(int64_t*)buf->pos);
+    int64_t ms_i = MONGO_64p(buf->pos);
     SV *datetime, *ms, **heval;
     HV *named_params;
     buf->pos += INT_64;
@@ -514,7 +508,7 @@ elem_to_sv (int type, buffer *buf)
       buf->pos += INT_32;
     }
 
-    code_len = MONGO_32(*(int*)buf->pos);
+    code_len = MONGO_32p(buf->pos);
     buf->pos += INT_32;
 
     code = sv_2mortal(newSVpvn(buf->pos, code_len-1));
@@ -535,9 +529,9 @@ elem_to_sv (int type, buffer *buf)
     SV *sec_sv, *inc_sv;
     int sec, inc;
 
-    inc = MONGO_32(*(int*)buf->pos);
+    inc = MONGO_32p(buf->pos);
     buf->pos += INT_32;
-    sec = MONGO_32(*(int*)buf->pos);
+    sec = MONGO_32p(buf->pos);
     buf->pos += INT_32;
 
     sec_sv = sv_2mortal(newSViv(sec));
@@ -814,7 +808,10 @@ void perl_mongo_make_id(char *id) {
 
   memcpy(data+4, M, 3);
   memcpy(data+7, P, 2);
-  memcpy(data+9, I, 3);
+
+  data[9] = I[2];
+  data[10] = I[1];
+  data[11] = I[0];//  memcpy(data+9, I, 3);
 #endif
 }
 
@@ -1319,11 +1316,32 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
             }
         }
     } else {
+        int is_string = 0;
+#if PERL_REVISION==5 && PERL_VERSION<=10
+        /* Flags usage changed in Perl 5.10.1.  In Perl 5.8, there is no way to
+           tell from flags whether something is a string or an int!
+           Therefore, for 5.8, we check:
+           
+           if (isString(sv) and number(sv) == 0 and string(sv) != '0') {
+               return string;
+           }
+           else {
+               return number;
+           }
+           
+           This will incorrectly return '0' as a number in 5.8.
+        */
+        if (SvPOK(sv) && ((SvNOK(sv) && SvNV(sv) == 0) ||
+                          (SvIOK(sv) && SvIV(sv) == 0)) &&
+            strcmp(SvPV_nolen(sv), "0") != 0) {
+            is_string = 1;
+        }
+#endif
         switch (SvTYPE (sv)) {
 	    /* double */
             case SVt_NV: 
             case SVt_PVNV: {
-              if (SvNOK(sv)) {
+              if (!is_string && SvNOK(sv)) {
                 set_type(buf, BSON_DOUBLE);
                 perl_mongo_serialize_key(buf, key, is_insert);
                 perl_mongo_serialize_double(buf, (double)SvNV (sv));
@@ -1335,7 +1353,8 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
             case SVt_PVIV: 
             case SVt_PVLV:
             case SVt_PVMG: {
-              if (SvIOK(sv) || SvIOKp(sv)) {
+              // if it's publicly an int OR (privately an int AND not publicly a string)
+              if (!is_string && (SvIOK(sv) || (SvIOKp(sv) && !SvPOK(sv)))) {
 #if defined(USE_64_BIT_INT)
                 set_type(buf, BSON_LONG);
                 perl_mongo_serialize_key(buf, key, is_insert);

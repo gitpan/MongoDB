@@ -29,6 +29,7 @@ test_requires 'File::Slurp';
 test_requires 'FileHandle';
 test_requires 'JSON';
 test_requires 'File::Temp' => '0.17';
+test_requires 'Try::Tiny';
 
 mongo;
 
@@ -57,7 +58,7 @@ if ($Config::Config{useithreads}) {
 WriteAll;
 
 package MY;
-our $VERSION = '0.42';
+our $VERSION = '0.43';
 
 use Config;
 

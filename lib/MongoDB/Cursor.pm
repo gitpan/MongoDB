@@ -15,7 +15,7 @@
 #
 
 package MongoDB::Cursor;
-our $VERSION = '0.43';
+our $VERSION = '0.44';
 
 # ABSTRACT: A cursor/iterator for Mongo query results
 use Any::Moose;
@@ -248,8 +248,9 @@ sub _do_query {
         return;
     }
 
-    my $opts = $MongoDB::Cursor::slave_okay | ($self->tailable << 1) |
-        ($self->slave_okay << 2) | ($self->immortal << 4) |
+    my $opts = ($self->tailable << 1) |
+        (($MongoDB::Cursor::slave_okay | $self->slave_okay) << 2) |
+        ($self->immortal << 4) |
         ($self->partial << 7);
 
     my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit, $self->_query, $self->_fields);

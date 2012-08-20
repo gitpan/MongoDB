@@ -10,6 +10,7 @@ use DateTime;
 use Data::Types qw(:float);
 use Tie::IxHash;
 use MongoDB::Timestamp; # needed if db is being run as master
+use MongoDB::BSON::Binary;
 
 my $conn;
 eval {
@@ -17,14 +18,14 @@ eval {
     if (exists $ENV{MONGOD}) {
         $host = $ENV{MONGOD};
     }
-    $conn = MongoDB::Connection->new(host => $host);
+    $conn = MongoDB::Connection->new(host => $host, ssl => $ENV{MONGO_SSL});
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 45;
+    plan tests => 73;
 }
 
 my $db = $conn->get_database('foo');
@@ -213,7 +214,8 @@ my $c = $db->get_collection('bar');
 package Person;
 use Any::Moose;
 has 'name' => ( is=>'rw', isa=>'Str' );
-has 'age' => ( is=>'rw', isa=>'Int' );
+has 'age'  => ( is=>'rw', isa=>'Int' );
+has 'size' => ( is=>'rw', isa=>'Num' );
 
 package main;
 {
@@ -245,6 +247,23 @@ package main;
 
     # make sure it was saved as string
     is($v->{'key'}, 'zzz');
+}
+
+# store a scalar with magic that's both a float and int (PVMG w/pIOK set)
+{
+    $c->drop;
+
+    # PVMG (NV is 11.5)
+    my $size = Person->new( size => 11.5 )->size;
+
+    # add pIOK flag (IV is 11)
+    int($size);
+
+    $c->insert({'key' => $size});
+    my $v = $c->find_one;
+
+    # make sure it was saved as float
+    is(($v->{'key'}), $size);
 }
 
 # make sure this doesn't segfault
@@ -308,6 +327,52 @@ package main;
     is($c->count({num => 1}), 1);
     is($c->count({num => "001"}), 1);
     is($c->count, 2);
+}
+
+# MongoDB::BSON::Binary type
+{
+    $c->drop;
+
+    my $old = $MongoDB::BSON::use_binary;
+    $MongoDB::BSON::use_binary = 0;
+
+    my $str = "foo";
+    my $bin = {bindata => [
+                   \$str,
+                   MongoDB::BSON::Binary->new(data => $str),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_GENERIC),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_FUNCTION),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_GENERIC_DEPRECATED),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_UUID_DEPRECATED),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_UUID),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_MD5),
+                   MongoDB::BSON::Binary->new(data => $str, subtype => MongoDB::BSON::Binary->SUBTYPE_USER_DEFINED)]};
+
+    $c->insert($bin, {safe => 1});
+
+    my $doc = $c->find_one;
+
+    my $data = $doc->{'bindata'};
+    foreach (@$data) {
+        is($_, "foo");
+    }
+
+    $MongoDB::BSON::use_binary = 1;
+
+    $doc = $c->find_one;
+
+    $data = $doc->{'bindata'};
+    my @arr = @$data;
+
+    is($arr[0]->subtype, MongoDB::BSON::Binary->SUBTYPE_GENERIC);
+    is($arr[0]->data, $str);
+
+    for (my $i=1; $i<=$#arr; $i++ ) {
+        is($arr[$i]->subtype, $bin->{'bindata'}->[$i]->subtype);
+        is($arr[$i]->data, $bin->{'bindata'}->[$i]->data);
+    }
+
+    $MongoDB::BSON::use_binary = $old;
 }
 
 END {

@@ -78,7 +78,7 @@ Before you get started with MongoDB, it is important to know that, by default,
 MongoDB does not return a response from writes (inserts, updates, and deletes).
 If you would like to know if the insert succeeded or failed, use the C<safe>
 option.  For more information on this, see
-L<http://www.mongodb.org/display/DOCS/Last+Error+Commands> for details.
+L<http://www.mongodb.org/display/DOCS/getLastError+Command> for details.
 
 =head3 Inserting
 
@@ -274,6 +274,4 @@ Now that you know the basic syntax used by the Perl driver, you should be able
 to translate the JavaScript examples in the main MongoDB documentation
 (L<http://www.mongodb.org>) into Perl.
 
-If there's anything else you'd like to see as part of the tutorial or
-documentation in general, please contact kristina@mongodb.org.
-
+Check out L<MongoDB::Examples> for more examples.

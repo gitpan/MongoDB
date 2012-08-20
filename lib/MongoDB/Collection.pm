@@ -386,6 +386,35 @@ sub update {
     return 1;
 }
 
+=head2 rename ("newcollectionname")
+
+    my $newcollection = $collection->rename("mynewcollection");
+
+Renames the collection.  It expects that the new name is currently not in use.  
+
+Returns the new collection.  If a collection already exists with that new collection name this will
+die.
+
+=cut
+
+sub rename {
+    my ($self, $collectionname) = @_;
+
+    my $conn = $self->_database->_connection;
+    my $database = $conn->admin;
+    my $fullname = $self->full_name;
+  
+    my ($db, @collection_bits) = split(/\./, $fullname);
+    my $collection = join('.', @collection_bits);
+    my $obj = $database->run_command([ 'renameCollection' => "$db.$collection", 'to' => "$db.$collectionname" ]);
+
+    if(ref($obj) eq "HASH"){
+      return $conn->$db->$collectionname;
+    }
+    else {
+      die $obj;
+    }
+}
 
 =head2 remove ($query?, $options?)
 
@@ -454,7 +483,7 @@ sub remove {
     $collection->ensure_index({"foo" => 1, "bar" => -1}, { unique => true });
 
 Makes sure the given C<$keys> of this collection are indexed. C<$keys> can be an
-array reference, hash reference, or C<Tie::IxHash>.  C<Tie::IxHash> is prefered
+array reference, hash reference, or C<Tie::IxHash>.  C<Tie::IxHash> is preferred
 for multi-key indexes, so that the keys are in the correct order.  1 creates an
 ascending index, -1 creates a descending index.
 
@@ -494,14 +523,10 @@ sub ensure_index {
         $obj->Push("name" => MongoDB::Collection::to_index_string($keys));
     }
 
-    if (exists $options->{unique}) {
-        $obj->Push("unique" => ($options->{unique} ? boolean::true : boolean::false));
-    }
-    if (exists $options->{drop_dups}) {
-        $obj->Push("dropDups" => ($options->{drop_dups} ? boolean::true : boolean::false));
-    }
-    if (exists $options->{background}) {
-        $obj->Push("background" => ($options->{background} ? boolean::true : boolean::false));
+    foreach ("unique", "drop_dups", "background", "sparse") {
+        if (exists $options->{$_}) {
+            $obj->Push("$_" => ($options->{$_} ? boolean::true : boolean::false));
+        }
     }
     $options->{'no_ids'} = 1;
 

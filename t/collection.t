@@ -3,6 +3,7 @@ use warnings;
 use Test::More;
 use Test::Exception;
 
+use utf8;
 use Data::Types qw(:float);
 use Tie::IxHash;
 use Encode qw(encode decode);
@@ -16,14 +17,14 @@ eval {
     if (exists $ENV{MONGOD}) {
         $host = $ENV{MONGOD};
     }
-    $conn = MongoDB::Connection->new(host => $host);
+    $conn = MongoDB::Connection->new(host => $host, ssl => $ENV{MONGO_SSL});
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 121;
+    plan tests => 136;
 }
 
 my $db = $conn->get_database('test_database');
@@ -62,6 +63,15 @@ $coll->update({ _id => $id }, {
     and => [qw/an array reference/],
 });
 is($coll->count, 1);
+# rename 
+my $newcoll = $coll->rename('test_collection.rename');
+is($newcoll->name, 'test_collection.rename', 'rename');
+is($coll->count, 0, 'rename');
+is($newcoll->count, 1, 'rename');
+$coll = $newcoll->rename('test_collection');
+is($coll->name, 'test_collection', 'rename');
+is($coll->count, 1, 'rename');
+is($newcoll->count, 0, 'rename');
 
 is($coll->count({ mongo => 'programmer' }), 0, 'count = 0');
 is($coll->count({ mongo => 'hacker'     }), 1, 'count = 1');
@@ -486,6 +496,62 @@ SKIP: {
     ok($index);
     ok($index->{'key'});
     ok($index->{'key'}->{'x.y'});
+    $coll->drop;
+}
+
+# sparse indexes
+{
+    for (1..10) {
+        $coll->insert({x => $_, y => $_}, {safe => 1});
+        $coll->insert({x => $_}, {safe => 1});
+    }
+    is($coll->count, 20);
+
+    $coll->ensure_index({"y" => 1}, {"unique" => 1, "name" => "foo"});
+    my $index = $coll->_database->get_collection("system.indexes")->find_one({"name" => "foo"});
+    ok(!$index);
+
+    $coll->ensure_index({"y" => 1}, {"unique" => 1, "sparse" => 1, "name" => "foo"});
+    $index = $coll->_database->get_collection("system.indexes")->find_one({"name" => "foo"});
+    ok($index);
+
+    $coll->drop;
+}
+
+# utf8 test, croak when null key is inserted
+{
+    $MongoDB::BSON::utf8_flag_on = 1;
+    my $ok = 0;
+    my $kanji = "漢\0字";
+    utf8::encode($kanji);
+    eval{
+     $ok = $coll->insert({ $kanji => 1});
+    };
+    is($ok,0,"Insert key with Null Char Operation Failed");
+    is($coll->count, 0, "Insert key with Null Char in Key Failed");
+    $coll->drop;
+    $ok = 0;
+    my $kanji_a = "漢\0字";
+    my $kanji_b = "漢\0字中";
+    my $kanji_c = "漢\0字国";
+    utf8::encode($kanji_a);
+    utf8::encode($kanji_b);
+    utf8::encode($kanji_c);
+    eval {
+     $ok = $coll->batch_insert([{ $kanji_a => "some data"} , { $kanji_b => "some more data"}, { $kanji_c => "even more data"}]);
+    };
+    is($ok,0, "batch_insert key with Null Char in Key Operation Failed");
+    is($coll->count, 0, "batch_insert key with Null Char in Key Failed");
+    $coll->drop;
+
+    #test ixhash
+    my $hash = Tie::IxHash->new("f\0f" => 1);
+    eval {
+     $ok = $coll->insert($hash);
+    };
+    is($ok,0, "ixHash Insert key with Null Char in Key Operation Failed");
+    is($coll->count, 0, "ixHash key with Null Char in Key Operation Failed");
+    my $tied = $coll->find_one;
     $coll->drop;
 }
 

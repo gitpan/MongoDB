@@ -42,6 +42,7 @@ BOOT:
         gv_fetchpv("MongoDB::BSON::char",  GV_ADDMULTI, SVt_IV);
         gv_fetchpv("MongoDB::BSON::utf8_flag_on",  GV_ADDMULTI, SVt_IV);
         gv_fetchpv("MongoDB::BSON::use_boolean",  GV_ADDMULTI, SVt_IV);
+        gv_fetchpv("MongoDB::BSON::use_binary",  GV_ADDMULTI, SVt_IV);
         perl_mongo_mutex_init();
 
 void
@@ -177,4 +178,19 @@ read_documents(sv)
          while(buf.pos < buf.end) {
              XPUSHs(sv_2mortal(perl_mongo_bson_to_sv(&buf)));
          }
+
+
+
+
+int
+_test_is_utf8(input)
+        SV *input
+    CODE:
+        /* exposed for testing only */
+        STRLEN len;
+        char *str = SvPV( input, len );
+        int ret = isUTF8(str, len);
+        RETVAL = ret;
+    OUTPUT:
+        RETVAL
 

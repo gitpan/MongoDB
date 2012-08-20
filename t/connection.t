@@ -13,7 +13,7 @@ eval {
     if (exists $ENV{MONGOD}) {
         $host = $ENV{MONGOD};
     }
-    $conn = MongoDB::Connection->new(host => $host);
+    $conn = MongoDB::Connection->new(host => $host, ssl => $ENV{MONGO_SSL});
 };
 
 if ($@) {
@@ -24,35 +24,40 @@ else {
 }
 
 throws_ok {
-    MongoDB::Connection->new(host => 'localhost', port => 1);
+    MongoDB::Connection->new(host => 'localhost', port => 1, ssl => $ENV{MONGO_SSL});
 } qr/couldn't connect to server/, 'exception on connection failure';
 
 SKIP: {
     skip "connecting to default host/port won't work with a remote db", 6 if exists $ENV{MONGOD};
 
     lives_ok {
-        $conn = MongoDB::Connection->new;
+        $conn = MongoDB::Connection->new(ssl => $ENV{MONGO_SSL});
     } 'successful connection';
     isa_ok($conn, 'MongoDB::Connection');
 
     is($conn->host, 'mongodb://localhost:27017', 'host default value');
 
     # just make sure a couple timeouts work
-    my $to = MongoDB::Connection->new('timeout' => 1);
-    $to = MongoDB::Connection->new('timeout' => 123);
-    $to = MongoDB::Connection->new('timeout' => 2000000);
+    my $to = MongoDB::Connection->new('timeout' => 1, ssl => $ENV{MONGO_SSL});
+    $to = MongoDB::Connection->new('timeout' => 123, ssl => $ENV{MONGO_SSL});
+    $to = MongoDB::Connection->new('timeout' => 2000000, ssl => $ENV{MONGO_SSL});
 
     # test conn format
     lives_ok {
-        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27017");
+        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27017", ssl => $ENV{MONGO_SSL});
     } 'connected';
 
     lives_ok {
-        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27017,");
+        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27017,", ssl => $ENV{MONGO_SSL});
     } 'extra comma';
 
     lives_ok {
-        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:27018,localhost:27019,localhost");
+        my $ip = 27020;
+        while ((exists $ENV{DB_PORT} && $ip eq $ENV{DB_PORT}) ||
+               (exists $ENV{DB_PORT2} && $ip eq $ENV{DB_PORT2})) {
+            $ip++;
+        }
+        $conn = MongoDB::Connection->new("host" => "mongodb://localhost:".$ip.",localhost:".($ip+1).",localhost", ssl => $ENV{MONGO_SSL});
     } 'last in line';
 }
 
@@ -63,11 +68,12 @@ $db->get_collection('test_collection')->insert({ foo => 42 }, {safe => 1});
 
 ok((grep { $_ eq 'test_database' } $conn->database_names), 'database_names');
 
-lives_ok {
-    $db->drop;
-} 'drop database';
+my $result = $db->drop;
+is(ref $result, 'HASH', $result);
+is($result->{'ok'}, 1, 'db was dropped');
 
-ok(!(grep { $_ eq 'test_database' } $conn->database_names), 'database got dropped');
+# TODO: won't work on master/slave until SERVER-2329 is fixed
+# ok(!(grep { $_ eq 'test_database' } $conn->database_names), 'database got dropped');
 
 
 # w
@@ -93,11 +99,11 @@ SKIP: {
 {
     my $timeout = $MongoDB::Cursor::timeout;
 
-    my $conn2 = MongoDB::Connection->new(auto_connect => 0);
+    my $conn2 = MongoDB::Connection->new(auto_connect => 0, ssl => $ENV{MONGO_SSL});
     is($conn2->query_timeout, $timeout, 'query timeout');
 
     $MongoDB::Cursor::timeout = 40;
-    $conn2 = MongoDB::Connection->new(auto_connect => 0);
+    $conn2 = MongoDB::Connection->new(auto_connect => 0, ssl => $ENV{MONGO_SSL});
     is($conn2->query_timeout, 40, 'query timeout');
 
     $MongoDB::Cursor::timeout = $timeout;

@@ -24,10 +24,10 @@
 #include "regcomp.h"
 
 static stackette* check_circular_ref(void *ptr, stackette *stack);
-static int isUTF8(const char*, int);
 static void serialize_regex(buffer*, const char*, REGEXP*, int is_insert);
 static void serialize_regex_flags(buffer*, SV*);
 static void append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert);
+static void containsNullChar(const char* str, int len);
 
 #ifdef USE_ITHREADS
 static perl_mutex inc_mutex;
@@ -167,6 +167,29 @@ perl_mongo_call_function (const char *func, int num, ...) {
   return ret;
 }
 
+static int perl_mongo_regex_flags( char **flags_ptr, SV *re ) {
+  dSP;
+  ENTER;
+  SAVETMPS;
+  PUSHMARK (SP);
+  XPUSHs (re);
+  PUTBACK;
+
+  int ret_count = call_pv( "re::regexp_pattern", G_ARRAY );
+  SPAGAIN;
+
+  if ( ret_count != 2 ) { 
+    croak( "error introspecting regex" );
+  }
+
+  // regexp_pattern returns two items (in list context), the pattern and a list of flags
+  SV *flags_sv = POPs;
+  SV *pat_sv   = POPs;
+
+  char *flags = SvPVutf8_nolen(flags_sv);
+
+  *flags_ptr = strdup(flags);
+}
 
 void
 perl_mongo_attach_ptr_to_instance (SV *self, void *ptr, MGVTBL *vtbl)
@@ -339,14 +362,15 @@ elem_to_sv (int type, buffer *buf)
   }
   case BSON_BINARY: {
     int len = MONGO_32p(buf->pos);
-    char type;
+    unsigned char type;
+    SV *use_binary = get_sv("MongoDB::BSON::use_binary", 0);
 
     buf->pos += INT_32;
 
     // we should do something with type
     type = *buf->pos++;
 
-    if (type == 2) {
+    if (type == SUBTYPE_BINARY_DEPRECATED) {
       int len2 = MONGO_32p(buf->pos);
       if (len2 == len - 4) {
         len = len2;
@@ -354,9 +378,16 @@ elem_to_sv (int type, buffer *buf)
       }
     }
 
-    value = newSVpvn(buf->pos, len);
-    buf->pos += len;
+    if (use_binary && SvTRUE(use_binary)) {
+      SV *data = sv_2mortal(newSVpvn(buf->pos, len));
+      SV *subtype = sv_2mortal(newSViv(type));
+      value = perl_mongo_construct_instance("MongoDB::BSON::Binary", "data", data, "subtype", subtype, NULL);
+    }
+    else {
+      value = newSVpvn(buf->pos, len);
+    }
 
+    buf->pos += len;
     break;
   }
   case BSON_BOOL: {
@@ -515,7 +546,6 @@ elem_to_sv (int type, buffer *buf)
 
     if (type == BSON_CODE) {
       scope = perl_mongo_bson_to_sv(buf);
-
       value = perl_mongo_construct_instance("MongoDB::Code", "code", code, "scope", scope, NULL);
     }
     else {
@@ -710,19 +740,22 @@ void perl_mongo_serialize_oid(buffer *buf, char *id) {
   buf->pos += OID_SIZE;
 }
 
-void perl_mongo_serialize_bindata(buffer *buf, SV *sv)
+void perl_mongo_serialize_bindata(buffer *buf, const int subtype, SV *sv)
 {
   STRLEN len;
   const char *bytes = SvPVbyte (sv, len);
 
-  // length of length+bindata
-  perl_mongo_serialize_int(buf, len+4);
+  if (subtype == SUBTYPE_BINARY_DEPRECATED) {
+    // length of length+bindata
+    perl_mongo_serialize_int(buf, len+4);
+    perl_mongo_serialize_byte(buf, subtype);
+    perl_mongo_serialize_int(buf, len);
+  }
+  else {
+    perl_mongo_serialize_int(buf, len);
+    perl_mongo_serialize_byte(buf, subtype);
+  }
 
-  // TODO: type
-  perl_mongo_serialize_byte(buf, 2);
-
-  // length
-  perl_mongo_serialize_int(buf, len);
   // bindata
   perl_mongo_serialize_bytes(buf, bytes, len);
 }
@@ -910,7 +943,7 @@ hv_to_bson (buffer *buf, SV *sv, AV *ids, stackette *stack, int is_insert)
     SV **hval;
     STRLEN len;
     const char *key = HePV (he, len);
-
+    containsNullChar(key, len);
     /* if we've already added the oid field, continue */
     if (ids && strcmp(key, "_id") == 0) {
       continue;
@@ -1035,7 +1068,7 @@ ixhash_to_bson(buffer *buf, SV *sv, AV *ids, stackette *stack, int is_insert) {
     }
 
     str = SvPV(*k, len);
-
+    containsNullChar(str,len);
     if (isUTF8(str, len)) {
       str = SvPVutf8(*k, len);
     }
@@ -1050,34 +1083,60 @@ ixhash_to_bson(buffer *buf, SV *sv, AV *ids, stackette *stack, int is_insert) {
   Safefree(stack);
 }
 
-static int isUTF8(const char *s, int len) {
+static void containsNullChar(const char* str, int len) {
+  if(strlen(str)  < len)
+    croak("key contains null char");
+}
+
+int isUTF8(const char *s, int len) {
   int i;
 
   for (i=0; i<len; i++) {
-    if (i+3 < len &&
-        (s[i] & 248) == 240 &&
-        (s[i+1] & 192) == 128 &&
-        (s[i+2] & 192) == 128 &&
-        (s[i+3] & 192) == 128) {
-      i += 3;
-    }
-    else if (i+2 < len &&
-             (s[i] & 240) == 224 &&
-             (s[i+1] & 192) == 128 &&
-             (s[i+2] & 192) == 128) {
-      i += 2;
-    }
-    else if (i+1 < len &&
-             (s[i] & 224) == 192 &&
-             (s[i+1] & 192) == 128) {
-      i += 1;
-    }
-    else if ((s[i] & 128) != 0) {
-      return 0;
+    if ((s[i] & 128) == 128) {
+      if ( i+3 < len                                                  &&    /* valid 4-byte:            */
+           (
+             ( (s[i] & 127) == 112 &&                                       /* byte 1 == F0 and         */
+               ( (s[i+1] & 240) == 144 || (s[i+1] & 224) == 160 )) ||       /* byte 2 >= 90 and <= BF   */
+             ( (s[i] & 127) >= 113 && (s[i] & 127) <= 115                   /* byte 1 >= F1 and <= F3   */
+                                   && (s[i+1] & 192) == 128 )      ||       /* byte 2 start bits 10     */
+             ( (s[i] & 127) == 116 && (s[i+1] & 128) == 128                 /* byte 1 == F4 and         */
+                                   && (s[i+1] & 127) <= 15  )               /* byte 2 >= 80 and <= 8F   */
+           )                                                          &&
+           (s[i+2] & 192) == 128                                      &&    /* byte 3 start bits 10     */
+           (s[i+3] & 192) == 128                                            /* byte 4 start bits 10     */
+         ) {
+        i += 3;
+      }
+      else if ( i+2 < len                                             &&    /* valid 3-byte:            */
+           (
+             ( (s[i] & 127) == 96  && (s[i+1] & 224) == 160 )      ||       /* byte 1 == E0 and byte 2 >= A0 and <= BF */
+             ( (s[i] & 127) == 109 && (s[i+1] & 224) == 128 )      ||       /* byte 1 == ED and byte 2 >= 80 and <= 9F */
+             (
+               ( (s[i] & 127) >= 97  && (s[i] & 127) <= 108 ||              /* byte 1 >= E1 and <= EC   */
+                 (s[i] & 127) == 110 || (s[i] & 127) == 111                 /* or byte 1 == EE or == EF */
+               ) && (s[i+1] & 192) == 128                                   /* and byte 2 start bits 10 */
+             )
+           )                                                          &&
+           (s[i+2] & 192) == 128                                            /* byte 3 start bits 10     */
+         ) {
+        i += 2;
+      }
+      else if ( i+1 < len                                             &&    /* valid 2-byte:            */
+           (s[i] & 127) >= 66                                         &&    /* byte 1 >= C2             */
+           (s[i] & 127) <= 95                                         &&    /* byte 1 <= DF             */
+           (s[i+1] & 192) == 128                                            /* byte 2 start bits 10     */
+         ) {
+        i += 1;
+      }
+      else {
+        return 0;
+      }
     }
   }
   return 1;
 }
+
+
 
 
 static void
@@ -1279,6 +1338,19 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
         perl_mongo_serialize_int(buf, str_len+1);
         perl_mongo_serialize_string(buf, str, str_len);
       }
+      else if (sv_isa(sv, "MongoDB::BSON::Binary")) {
+        SV *data, *subtype;
+
+        set_type(buf, BSON_BINARY);
+        perl_mongo_serialize_key(buf, key, is_insert);
+
+        subtype = perl_mongo_call_reader(sv, "subtype");
+        data = perl_mongo_call_reader(sv, "data");
+        perl_mongo_serialize_bindata(buf, SvIV(subtype), data);
+
+        SvREFCNT_dec(subtype);
+        SvREFCNT_dec(data);
+      }
 #if PERL_REVISION==5 && PERL_VERSION>=12
       // Perl 5.12 regexes
       else if (sv_isa(sv, "Regexp")) {
@@ -1303,7 +1375,7 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
           /* binary */
           set_type(buf, BSON_BINARY);
           perl_mongo_serialize_key(buf, key, is_insert);
-          perl_mongo_serialize_bindata(buf, SvRV(sv));
+          perl_mongo_serialize_bindata(buf, SUBTYPE_BINARY, SvRV(sv));
         }
       }
       else {
@@ -1328,7 +1400,7 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
         /* binary */
         set_type(buf, BSON_BINARY);
         perl_mongo_serialize_key(buf, key, is_insert);
-        perl_mongo_serialize_bindata(buf, SvRV(sv));
+        perl_mongo_serialize_bindata(buf, SUBTYPE_BINARY, SvRV(sv));
         break;
       default:
         sv_dump(SvRV(sv));
@@ -1382,6 +1454,13 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
     case SVt_PVIV:
     case SVt_PVLV:
     case SVt_PVMG: {
+      if ((aggressively_number & IS_NUMBER_NOT_INT) || (!is_string && SvNOK(sv))) {
+        set_type(buf, BSON_DOUBLE);
+        perl_mongo_serialize_key(buf, key, is_insert);
+        perl_mongo_serialize_double(buf, (double)SvNV (sv));
+        break;
+      }
+
       // if it's publicly an int OR (privately an int AND not publicly a string)
       if (aggressively_number || (!is_string && (SvIOK(sv) || (SvIOKp(sv) && !SvPOK(sv))))) {
 #if defined(USE_64_BIT_INT)
@@ -1400,7 +1479,7 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
       if (sv_len (sv) != strlen (SvPV_nolen (sv))) {
         set_type(buf, BSON_BINARY);
         perl_mongo_serialize_key(buf, key, is_insert);
-        perl_mongo_serialize_bindata(buf, sv);
+        perl_mongo_serialize_bindata(buf, SUBTYPE_BINARY, sv);
       }
       else {
         STRLEN len;
@@ -1434,28 +1513,21 @@ static void serialize_regex(buffer *buf, const char *key, REGEXP *re, int is_ins
 static void serialize_regex_flags(buffer *buf, SV *sv) {
   char flags[] = {0,0,0,0,0,0};
   unsigned int i = 0, f = 0;
-  STRLEN string_length;
-  char *string = SvPV(sv, string_length);
 
-  /* In order to work on newer versions of perl, this will also have to handle
-   * (?^...:..)  I'm not sure what to do with that though. In the interest of
-   * portability of data between perl versions, it'd make sense to just
-   * denormalise ^ into regular flags, but that kind of defeats the purpose of ^.
-   *
-   * Also, this doesn't cover all the flags available on recent perls, and nor
-   * does the matching deserialisation routine.
-   */
-  for(i = 2; i < string_length && string[i] != '-'; i++) {
-    if (string[i] == 'i' ||
-        string[i] == 'm' ||
-        string[i] == 'x' ||
-        string[i] == 'l' ||
-        string[i] == 's' ||
-        string[i] == 'u') {
-      flags[f++] = string[i];
-    }
-    else if(string[i] == ':') {
-      break;
+  char *flags_str;
+  perl_mongo_regex_flags( &flags_str, sv );
+
+  for ( i = 0; i < sizeof( flags_str ); i++ ) { 
+    if ( flags_str[i] == NULL ) break;
+
+    // MongoDB supports only flags /imxs, so warn if we get anything else and discard them.
+    if ( flags_str[i] == 'i' ||
+         flags_str[i] == 'm' ||
+         flags_str[i] == 'x' ||
+         flags_str[i] == 's' ) { 
+      flags[f++] = flags_str[i];
+    } else { 
+      warn( "stripped unsupported regex flag /%c from MongoDB regex\n", flags_str[i] );
     }
   }
 

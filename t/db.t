@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+
 use Test::More;
 use Test::Exception;
 
@@ -11,14 +12,14 @@ eval {
     if (exists $ENV{MONGOD}) {
         $host = $ENV{MONGOD};
     }
-    $conn = MongoDB::Connection->new(host => $host);
+    $conn = MongoDB::Connection->new(host => $host, ssl => $ENV{MONGO_SSL});
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 11;
+    plan tests => 10;
 }
 
 my $db   = $conn->get_database('test_database');
@@ -31,8 +32,7 @@ is($result->{ok}, 1, 'last_error1');
 is($result->{n}, 0, 'last_error2');
 is($result->{err}, undef, 'last_error3');
 
-$result = $db->run_command({forceerror => 1});
-ok($result =~ /asser[st]ion/, 'forced error: '.$result);
+$db->run_command({forceerror => 1});
 
 $result = $db->last_error;
 is($result->{ok}, 1, 'last_error1');

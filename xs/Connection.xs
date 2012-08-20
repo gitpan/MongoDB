@@ -100,10 +100,11 @@ MODULE = MongoDB::Connection  PACKAGE = MongoDB::Connection
 PROTOTYPES: DISABLE
 
 void 
-_init_conn(self, host, port)
+_init_conn(self, host, port, ssl)
     SV *self
     char *host
     int port
+    bool ssl
   PREINIT:
     SV *auto_reconnect_sv = 0, *timeout_sv = 0;
     mongo_link *link;
@@ -120,7 +121,11 @@ _init_conn(self, host, port)
     memcpy(link->master->host, host, strlen(host));
     link->master->port = port;
     link->master->connected = 0;
-
+    link->ssl = ssl;
+#ifdef MONGO_SSL 
+    link->ssl_handle = NULL;
+    link->ssl_context = NULL;
+#endif
     auto_reconnect_sv = perl_mongo_call_reader (ST(0), "auto_reconnect");
     timeout_sv = perl_mongo_call_reader (ST(0), "timeout");
 
@@ -146,7 +151,13 @@ _init_conn_holder(self, master)
 
     self_link->master = master_link->master;
     self_link->copy = 1;
-    
+    self_link->ssl = master_link->ssl;
+#ifdef MONGO_SSL 
+    self_link->ssl_handle = master_link->ssl_handle;
+    self_link->ssl_context = master_link->ssl_context;
+#endif
+    self_link->sender = master_link->sender;
+    self_link->receiver = master_link->receiver;
 
 void
 connect (self)
@@ -155,8 +166,7 @@ connect (self)
      mongo_link *link = (mongo_link*)perl_mongo_get_ptr_from_instance(self, &connection_vtbl);
      SV *username, *password;
    CODE:
-     link->master->socket = perl_mongo_connect(link->master->host, link->master->port, link->timeout);
-     link->master->connected = link->master->socket != -1;
+    perl_mongo_connect(link);
 
      if (!link->master->connected) {
        croak ("couldn't connect to server %s:%d", link->master->host, link->master->port);
@@ -168,26 +178,35 @@ connect (self)
 
      if (SvPOK(username) && SvPOK(password)) {
        SV *database, *result, **ok;
-         
+
        database = perl_mongo_call_reader (self, "db_name");
        result = perl_mongo_call_method(self, "authenticate", 0, 3, database, username, password);
-       if (!result || SvTYPE(result) != SVt_RV) {
-         if (result && SvPOK(result)) {
-           croak("%s", SvPV_nolen(result));
-         }
-         else { 
-           sv_dump(result);
-           croak("something weird happened with authentication");
-         }
-       }
-         
-       ok = hv_fetch((HV*)SvRV(result), "ok", strlen("ok"), 0);
-       if (!ok || 1 != SvIV(*ok)) {
+       if (!result) {
          SvREFCNT_dec(database);
          SvREFCNT_dec(username);
          SvREFCNT_dec(password);
-
-         croak ("couldn't authenticate with server");
+         croak("authentication returned no result");
+       }
+       // we're expecting either a string (failure) or a hash (success hopefully)
+       if (SvPOK(result)) {
+         SvREFCNT_dec(database);
+         SvREFCNT_dec(username);
+         SvREFCNT_dec(password);
+         croak("%s", SvPV_nolen(result));
+       } else if (SvROK(result)) {
+         ok = hv_fetch((HV*)SvRV(result), "ok", strlen("ok"), 0);
+         if (!ok || 1 != SvIV(*ok)) {
+           SvREFCNT_dec(database);
+           SvREFCNT_dec(username);
+           SvREFCNT_dec(password);
+           croak ("couldn't authenticate with server");
+         }
+       } else {
+         sv_dump(result);
+         SvREFCNT_dec(database);
+         SvREFCNT_dec(username);
+         SvREFCNT_dec(password);
+         croak("something weird happened with authentication");
        }
 
        SvREFCNT_dec(database);

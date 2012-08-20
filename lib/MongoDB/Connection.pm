@@ -363,6 +363,23 @@ has find_master => (
     default  => 0,
 );
 
+=head2 ssl
+
+This tell the driver that you are connectin to an SSL mongodb.
+
+This option will be ignored if the driver was not compiled with SSL. You must
+also be using a database server that supports SSL.
+
+=cut
+
+has ssl => (
+    is       => 'ro',
+    isa      => 'Bool',
+    required => 1,
+    default  => 0,
+);
+
+
 # hash of servers in a set
 # call connected() to determine if a connection is enabled
 has _servers => (
@@ -383,38 +400,6 @@ has ts => (
     isa     => 'Int',
     default => 0
 );
-
-=head2 port [deprecated]
-
-B<Use L</host> instead.>
-
-Port to use when connecting. Defaults to C<27017>.
-
-=head2 left_host [deprecated]
-
-B<Use L</host> instead.>
-
-Paired connection host to connect to. Can be master or slave.
-
-=head2 left_port [deprecated]
-
-B<Use L</host> instead.>
-
-Port to use when connecting to left_host. Defaults to C<27017>.
-
-=head2 right_host [deprecated]
-
-B<Use L</host> instead.>
-
-Paired connection host to connect to. Can be master or slave.
-
-=head2 right_port [deprecated]
-
-B<Use L</host> instead.>
-
-Port to use when connecting to right_host. Defaults to C<27017>.
-
-=cut
 
 
 sub AUTOLOAD {
@@ -446,18 +431,14 @@ sub BUILD {
     # supported syntax
     else {
         my $str = substr $self->host, 10;
-        @pairs = split ",", $str;
+        @pairs =  map { $_ .= ":27017" unless $_ =~ /:/ ; $_ } split ",", $str;
     }
 
     # a simple single server is special-cased (so we don't recurse forever)
     if (@pairs == 1 && !$self->find_master) {
         my @hp = split ":", $pairs[0];
 
-        if (!exists $hp[1]) {
-            $hp[1] = 27017;
-        }
-
-        $self->_init_conn($hp[0], $hp[1]);
+        $self->_init_conn($hp[0], $hp[1], $self->ssl);
         if ($self->auto_connect) {
             $self->connect;
             $self->max_bson_size($self->_get_max_bson_size);
@@ -517,9 +498,8 @@ sub BUILD {
 sub _get_max_bson_size {
     my $self = shift;
     my $buildinfo = $self->get_database('admin')->run_command({buildinfo => 1});
-    my $max = $buildinfo->{'maxBsonObjectSize'};
-    if ($max) {
-        return $max;
+    if (ref($buildinfo) eq 'HASH' && exists $buildinfo->{'maxBsonObjectSize'}) {
+        return $buildinfo->{'maxBsonObjectSize'};
     }
     # default: 4MB
     return 4194304;
@@ -545,7 +525,12 @@ Lists all databases on the mongo server.
 sub database_names {
     my ($self) = @_;
     my $ret = $self->get_database('admin')->run_command({ listDatabases => 1 });
-    return map { $_->{name} } @{ $ret->{databases} };
+    if (ref($ret) eq 'HASH' && exists $ret->{databases}) {
+        return map { $_->{name} } @{ $ret->{databases} };
+    }
+    else {
+        die ($ret);
+    }
 }
 
 =head2 get_database($name)
@@ -628,7 +613,7 @@ sub get_master {
     }
     # auto-detect master
     else {
-        my $master = $conn->get_database('admin')->run_command({"ismaster" => 1});
+        my $master = $conn->get_database($self->db_name)->run_command({"ismaster" => 1});
 
         # check for errors
         if (ref($master) eq 'SCALAR') {
@@ -638,9 +623,15 @@ sub get_master {
         # if this is a replica set & we haven't renewed the host list in 1 sec
         if ($master->{'hosts'} && time() > $self->ts) {
             # update (or set) rs list
+            my %opts = ( auto_connect => 0 );
+            if ($self->username && $self->password) {
+                $opts{username} = $self->username;
+                $opts{password} = $self->password;
+                $opts{db_name}  = $self->db_name;
+            }
             for (@{$master->{'hosts'}}) {
                 if (!$self->_servers->{$_}) {
-                    $self->_servers->{$_} = MongoDB::Connection->new("host" => "mongodb://$_", auto_connect => 0);
+                    $self->_servers->{$_} = MongoDB::Connection->new("host" => "mongodb://$_", %opts);
                 }
             }
             $self->ts(time());

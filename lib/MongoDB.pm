@@ -20,7 +20,7 @@ use warnings;
 package MongoDB;
 # ABSTRACT: A Mongo Driver for Perl
 
-our $VERSION = '0.45';
+our $VERSION = '0.46_RC1';
 
 use XSLoader;
 use MongoDB::Connection;
@@ -46,7 +46,7 @@ MongoDB - Mongo Driver for Perl
 =head1 INTRO TO MONGODB
 
 This is the Perl driver for MongoDB, a document-oriented database.  This section
-introduces some of the basic concepts of MongoDB.  There's also a L<Tutorial>
+introduces some of the basic concepts of MongoDB.  There's also a L<MongoDB::Tutorial/"Tutorial">
 pod that introduces using the driver.  For more documentation on MongoDB in
 general, check out L<http://www.mongodb.org>.
 
@@ -109,7 +109,7 @@ To use MongoDB, first you need to load the MongoDB module:
     use strict;
     use warnings;
 
-(The C<use strict;> and C<use warnings;> isn't required, but it's strongly
+(The C<use strict;> and C<use warnings;> aren't required, but they're strongly
 recommended.)
 
 Then you need to connect to a Mongo database server.  By default, Mongo listens
@@ -131,8 +131,10 @@ As this is the default, we can use the equivalent shorthand:
 
 Connecting is relatively expensive, so try not to open superfluous connections.
 
-There is no way to explicitly disconnect from the database.  When C<$conn> goes
-out of scope, the connection will automatically be closed and cleaned up.
+There is no way to explicitly disconnect from the database.  However, the
+connection will automatically be closed and cleaned up when no references to
+the C<MongoDB::Connection> object exist, which occurs when C<$conn> goes out of
+scope (or earlier if you undefine it with C<undef>).
 
 =head2 INTERNALS
 
@@ -222,7 +224,7 @@ can be 1 for removing just one matching document.
 
   my @documents = MongoDB::read_documents($buffer);
 
-Decodes BSON documents from the given buffer
+Decodes BSON documents from the given buffer.
 
 =head1 SEE ALSO
 

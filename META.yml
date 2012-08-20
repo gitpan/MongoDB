@@ -6,19 +6,21 @@ author:
 build_requires:
   Data::Types: 0
   DateTime: 0
-  ExtUtils::MakeMaker: 6.42
+  ExtUtils::MakeMaker: 6.59
   File::Slurp: 0
   File::Temp: 0.17
   FileHandle: 0
   JSON: 0
   Test::Exception: 0
+  Test::Warn: 0
   Tie::IxHash: 0
   Try::Tiny: 0
   boolean: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.42
+  ExtUtils::MakeMaker: 6.59
 distribution_type: module
-generated_by: 'Module::Install version 1.01'
+dynamic_config: 1
+generated_by: 'Module::Install version 1.06'
 license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -37,8 +39,9 @@ requires:
   Tie::IxHash: 0
   XSLoader: 0
   boolean: 0
+  inc::Module::Install: 0
   perl: 5.8.4
 resources:
   license: http://apache.org/licenses/LICENSE-2.0
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.45
+version: 0.46_RC1

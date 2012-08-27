@@ -18,14 +18,17 @@ use strict;
 use warnings;
 
 package MongoDB;
+{
+  $MongoDB::VERSION = '0.46_3';
+}
 # ABSTRACT: A Mongo Driver for Perl
 
-our $VERSION = '0.46_RC1';
+
 
 use XSLoader;
 use MongoDB::Connection;
 
-XSLoader::load(__PACKAGE__, $VERSION, int rand(2 ** 24));
+XSLoader::load(__PACKAGE__, $MongoDB::VERSION, int rand(2 ** 24));
 
 1;
 

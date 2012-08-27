@@ -1,0 +1,61 @@
+{
+   "abstract" : "A Mongo Driver for Perl",
+   "author" : [
+      "Florian Ragwitz <rafl@debian.org>",
+      "Kristina Chodorow <kristina@mongodb.org>",
+      "Mike Friedman <mike.friedman@10gen.com>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Zilla version 4.300021, CPAN::Meta::Converter version 2.120921",
+   "license" : [
+      "apache_2_0"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "MongoDB",
+   "prereqs" : {
+      "runtime" : {
+         "requires" : {
+            "Any::Moose" : "0",
+            "DateTime" : "0",
+            "Digest::MD5" : "0",
+            "IO::File" : "0",
+            "Tie::IxHash" : "0",
+            "XSLoader" : "0",
+            "boolean" : "0",
+            "constant" : "0",
+            "overload" : "0",
+            "strict" : "0",
+            "warnings" : "0"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "Config" : "0",
+            "Data::Dump" : "0",
+            "Data::Dumper" : "0",
+            "Data::Types" : "0",
+            "Devel::Peek" : "0",
+            "Encode" : "0",
+            "File::Copy" : "0",
+            "File::Slurp" : "0",
+            "File::Temp" : "0",
+            "FileHandle" : "0",
+            "Inline" : "0",
+            "JSON" : "0",
+            "Test::Exception" : "0",
+            "Test::More" : "0",
+            "Test::Warn" : "0",
+            "Try::Tiny" : "0",
+            "bigint" : "0",
+            "threads" : "0",
+            "utf8" : "0"
+         }
+      }
+   },
+   "release_status" : "testing",
+   "version" : "0.46_3"
+}
+

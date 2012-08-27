@@ -1,12 +1,14 @@
-MongoDB Perl Driver
 
-This driver allows you to connect to MongoDB from Perl.
 
-To install, run:
+This archive contains the distribution MongoDB,
+version 0.46_3:
 
-    $ perl Makefile.PL [--ssl] (if you're using mongodb with ssl)
-    $ make
-    $ make test (export MONGO_SSL=1 if you're using mongodb with ssl)
-    $ sudo make install
+  A Mongo Driver for Perl
 
-For full documentation, see the CPAN page <http://search.cpan.org/dist/MongoDB>.
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
+

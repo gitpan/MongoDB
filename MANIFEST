@@ -50,6 +50,7 @@ t/threads/basic.t
 t/threads/cursor.t
 t/threads/oid.t
 t/types.t
+weaver.ini
 xs/BSON.xs
 xs/Connection.xs
 xs/Cursor.xs

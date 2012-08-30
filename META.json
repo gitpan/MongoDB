@@ -56,6 +56,17 @@
       }
    },
    "release_status" : "testing",
-   "version" : "0.46_4"
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://jira.mongodb.org/browse/PERL"
+      },
+      "homepage" : "https://github.com/mongodb/mongo-perl-driver",
+      "repository" : {
+         "type" : "git",
+         "url" : "git://github.com/mongodb/mongo-perl-driver.git",
+         "web" : "http://github.com/mongodb/mongo-perl-driver"
+      }
+   },
+   "version" : "0.46_5"
 }
 

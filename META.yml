@@ -43,4 +43,8 @@ requires:
   overload: 0
   strict: 0
   warnings: 0
-version: 0.46_4
+resources:
+  bugtracker: https://jira.mongodb.org/browse/PERL
+  homepage: https://github.com/mongodb/mongo-perl-driver
+  repository: git://github.com/mongodb/mongo-perl-driver.git
+version: 0.46_5

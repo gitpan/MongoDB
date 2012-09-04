@@ -15,6 +15,13 @@
       "version" : "2"
    },
    "name" : "MongoDB",
+   "no_index" : {
+      "directory" : [
+         "ext",
+         "inc",
+         "t"
+      ]
+   },
    "prereqs" : {
       "runtime" : {
          "requires" : {
@@ -67,6 +74,6 @@
          "web" : "http://github.com/mongodb/mongo-perl-driver"
       }
    },
-   "version" : "0.46_5"
+   "version" : "0.46_7"
 }
 

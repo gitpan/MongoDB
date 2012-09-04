@@ -16,7 +16,7 @@
 
 package MongoDB::Collection;
 {
-  $MongoDB::Collection::VERSION = '0.46_5';
+  $MongoDB::Collection::VERSION = '0.46_7';
 }
 
 

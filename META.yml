@@ -31,6 +31,11 @@ meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
 name: MongoDB
+no_index:
+  directory:
+    - ext
+    - inc
+    - t
 requires:
   Any::Moose: 0
   DateTime: 0
@@ -47,4 +52,4 @@ resources:
   bugtracker: https://jira.mongodb.org/browse/PERL
   homepage: https://github.com/mongodb/mongo-perl-driver
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.46_5
+version: 0.46_7

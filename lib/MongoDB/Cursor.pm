@@ -16,7 +16,7 @@
 
 package MongoDB::Cursor;
 {
-  $MongoDB::Cursor::VERSION = '0.46_5';
+  $MongoDB::Cursor::VERSION = '0.46_7';
 }
 
 

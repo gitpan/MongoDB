@@ -19,7 +19,7 @@ use warnings;
 
 package MongoDB;
 {
-  $MongoDB::VERSION = '0.46.1';
+  $MongoDB::VERSION = '0.46.2';
 }
 # ABSTRACT: A Mongo Driver for Perl
 

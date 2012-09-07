@@ -6,7 +6,7 @@
       "Mike Friedman <mike.friedman@10gen.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 4.300021, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "Dist::Zilla version 4.300023, CPAN::Meta::Converter version 2.120921",
    "license" : [
       "apache_2_0"
    ],
@@ -74,6 +74,6 @@
          "web" : "http://github.com/mongodb/mongo-perl-driver"
       }
    },
-   "version" : "0.46.1"
+   "version" : "0.46.2"
 }
 

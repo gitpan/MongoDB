@@ -16,7 +16,7 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.46.2';
+  $MongoDB::Database::VERSION = '0.46.3';
 }
 
 

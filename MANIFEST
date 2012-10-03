@@ -8,6 +8,15 @@ README
 dist.ini
 dist.ini~
 ext/Module/Install/PRIVATE/Mongo.pm
+inc/Module/Install.pm
+inc/Module/Install/Base.pm
+inc/Module/Install/Can.pm
+inc/Module/Install/Fetch.pm
+inc/Module/Install/Makefile.pm
+inc/Module/Install/Metadata.pm
+inc/Module/Install/PRIVATE/Mongo.pm
+inc/Module/Install/Win32.pm
+inc/Module/Install/WriteAll.pm
 lib/MongoDB.pm
 lib/MongoDB/BSON.pm
 lib/MongoDB/BSON/Binary.pm
@@ -36,6 +45,7 @@ t/connection.t
 t/cursor.t
 t/database.t
 t/db.t
+t/dt_types.t~
 t/gridfs.t
 t/img.png
 t/input.txt
@@ -50,6 +60,7 @@ t/threads/basic.t
 t/threads/cursor.t
 t/threads/oid.t
 t/types.t
+test_bi.pl~
 weaver.ini
 xs/BSON.xs
 xs/Connection.xs

@@ -16,7 +16,7 @@
 
 package MongoDB::BSON::Binary;
 {
-  $MongoDB::BSON::Binary::VERSION = '0.46.2';
+  $MongoDB::BSON::Binary::VERSION = '0.46.3';
 }
 
 

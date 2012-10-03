@@ -14,12 +14,13 @@
 #  limitations under the License.
 #
 
+use v5.10.0;
 use strict;
 use warnings;
 
 package MongoDB;
 {
-  $MongoDB::VERSION = '0.46.2';
+  $MongoDB::VERSION = '0.46.3';
 }
 # ABSTRACT: A Mongo Driver for Perl
 

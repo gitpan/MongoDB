@@ -16,7 +16,7 @@
 
 package MongoDB::BSON;
 {
-  $MongoDB::BSON::VERSION = '0.46.3';
+  $MongoDB::BSON::VERSION = '0.501.1';
 }
 
 

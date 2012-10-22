@@ -16,7 +16,7 @@
 
 package MongoDB::Connection;
 {
-  $MongoDB::Connection::VERSION = '0.46.3';
+  $MongoDB::Connection::VERSION = '0.501.1';
 }
 
 

@@ -16,7 +16,7 @@
 
 package MongoDB::Timestamp;
 {
-  $MongoDB::Timestamp::VERSION = '0.46.3';
+  $MongoDB::Timestamp::VERSION = '0.501.1';
 }
 
 

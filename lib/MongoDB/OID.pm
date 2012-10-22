@@ -16,7 +16,7 @@
 
 package MongoDB::OID;
 {
-  $MongoDB::OID::VERSION = '0.46.3';
+  $MongoDB::OID::VERSION = '0.501.1';
 }
 
 # ABSTRACT: A Mongo Object ID

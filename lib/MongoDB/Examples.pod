@@ -1,5 +1,6 @@
 
-# PODNAME: MongoDB Examples
+# PODNAME: MongoDB::Examples
+# ABSTRACT: Some examples of MongoDB syntax
 
 __END__
 
@@ -7,15 +8,11 @@ __END__
 
 =head1 NAME
 
-MongoDB Examples
+MongoDB::Examples - Some examples of MongoDB syntax
 
 =head1 VERSION
 
-version 0.502.0
-
-=head1 NAME
-
-MongoDB::Examples - Some examples of MongoDB syntax
+version 0.502.1
 
 =head1 MAPPING SQL TO MONGODB
 

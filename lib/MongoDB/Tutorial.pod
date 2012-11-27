@@ -1,5 +1,6 @@
 
-# PODNAME: MongoDB Tutorial
+# PODNAME: MongoDB::Tutorial
+# ABSTRACT: Getting started with MongoDB
 
 __END__
 
@@ -7,11 +8,11 @@ __END__
 
 =head1 NAME
 
-MongoDB Tutorial
+MongoDB::Tutorial - Getting started with MongoDB
 
 =head1 VERSION
 
-version 0.502.0
+version 0.502.1
 
 =head1 DESCRIPTION
 
@@ -20,10 +21,6 @@ is a good starting point if you have never used MongoDB before.
 
 The tutorial assumes that you are running a MongoDB database server locally on the
 default port.  You can download Mongo from L<http://www.mongodb.org>.
-
-=head1 NAME
-
-MongoDB::Tutorial - Getting started with MongoDB
 
 =head1 TERMINOLOGY
 

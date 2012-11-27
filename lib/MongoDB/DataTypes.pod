@@ -1,5 +1,6 @@
 
-# PODNAME: MongoDB Data Types
+# PODNAME: MongoDB::DataTypes
+# ABSTRACT: The data types used with MongoDB
 
 __END__
 
@@ -7,21 +8,17 @@ __END__
 
 =head1 NAME
 
-MongoDB Data Types
+MongoDB::DataTypes - The data types used with MongoDB
 
 =head1 VERSION
 
-version 0.502.0
+version 0.502.1
 
 =head1 DESCRIPTION
 
 This goes over the types you can save to the database and use for queries in the
 Perl driver.  If you are using another language, please refer to that language's
 documentation (L<http://api.mongodb.org>).
-
-=head1 NAME
-
-MongoDB::DataTypes - The data types used with MongoDB
 
 =head1 NOTES FOR SQL PROGRAMMERS
 

@@ -16,7 +16,7 @@
 
 package MongoDB::Connection;
 {
-  $MongoDB::Connection::VERSION = '0.502.0';
+  $MongoDB::Connection::VERSION = '0.502.1';
 }
 
 # ABSTRACT: A connection to a Mongo server
@@ -77,7 +77,7 @@ MongoDB::Connection - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.502.0
+version 0.502.1
 
 =head1 SYNOPSIS
 

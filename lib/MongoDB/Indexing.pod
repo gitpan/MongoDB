@@ -1,5 +1,6 @@
 
-# PODNAME: MongoDB Indexing
+# PODNAME: MongoDB::Indexing
+# ABSTRACT: Indexing collections
 
 __END__
 
@@ -7,15 +8,11 @@ __END__
 
 =head1 NAME
 
-MongoDB Indexing
+MongoDB::Indexing - Indexing collections
 
 =head1 VERSION
 
-version 0.502.0
-
-=head1 NAME
-
-MongoDB::Indexing - Indexing collections
+version 0.502.1
 
 =head1 CREATING AN INDEX
 

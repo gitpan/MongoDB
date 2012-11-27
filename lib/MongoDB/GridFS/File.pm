@@ -16,29 +16,16 @@
 
 package MongoDB::GridFS::File;
 {
-  $MongoDB::GridFS::File::VERSION = '0.501.1';
+  $MongoDB::GridFS::File::VERSION = '0.502.0';
 }
 
 
 # ABSTRACT: A Mongo GridFS file
 
-use Any::Moose;
+use Moose;
 use MongoDB::GridFS;
 use IO::File;
 
-=head1 NAME
-
-MongoDB::GridFS::File - A Mongo GridFS file
-
-=head1 SYNOPSIS
-
-    use MongoDB::GridFS::File;
-
-    my $outfile = IO::File->new("outfile", "w");
-    my $file = $grid->find_one;
-    $file->print($outfile);
-
-=cut
 
 has _grid => (
     is       => 'ro',
@@ -46,13 +33,6 @@ has _grid => (
     required => 1,
 );
 
-=head1 ATTRIBUTES
-
-=head2 info
-
-A hash of info information saved with this file.
-
-=cut
 
 has info => (
     is => 'ro',
@@ -60,18 +40,6 @@ has info => (
     required => 1,
 );
 
-=head1 METHODS
-
-=head2 print ($fh, $length?, $offset?)
-
-    $written = $file->print($fh, 50, 200);
-
-Writes the number of bytes specified from the offset specified 
-to the given file handle.  If no C<$length> or C<$offset> are
-given, the entire file is written to C<$fh>.  Returns the number
-of bytes written.
-
-=cut
 
 sub print {
     my ($self, $fh, $length, $offset) = @_;
@@ -123,16 +91,6 @@ sub print {
     return $written;
 }
 
-=head2 slurp ($length?, $offset?)
-
-    $bytes = $file->slurp(50, 200);
-    $all   = $file->slurp
-
-Return the number of bytes specified from the offset specified
-to the given file handle.  If no C<$length> or C<$offset> are
-given, the entire file is return.
-
-=cut
 
 
 sub slurp {
@@ -153,6 +111,84 @@ sub slurp {
 
 1;
 
+__END__
+
+=pod
+
+=head1 NAME
+
+MongoDB::GridFS::File - A Mongo GridFS file
+
+=head1 VERSION
+
+version 0.502.0
+
+=head1 SYNOPSIS
+
+    use MongoDB::GridFS::File;
+
+    my $outfile = IO::File->new("outfile", "w");
+    my $file = $grid->find_one;
+    $file->print($outfile);
+
+=head1 NAME
+
+MongoDB::GridFS::File - A Mongo GridFS file
+
+=head1 ATTRIBUTES
+
+=head2 info
+
+A hash of info information saved with this file.
+
+=head1 METHODS
+
+=head2 print ($fh, $length?, $offset?)
+
+    $written = $file->print($fh, 50, 200);
+
+Writes the number of bytes specified from the offset specified 
+to the given file handle.  If no C<$length> or C<$offset> are
+given, the entire file is written to C<$fh>.  Returns the number
+of bytes written.
+
+=head2 slurp ($length?, $offset?)
+
+    $bytes = $file->slurp(50, 200);
+    $all   = $file->slurp
+
+Return the number of bytes specified from the offset specified
+to the given file handle.  If no C<$length> or C<$offset> are
+given, the entire file is return.
+
 =head1 AUTHOR
 
   Kristina Chodorow <kristina@mongodb.org>
+
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
+=cut

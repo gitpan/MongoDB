@@ -16,16 +16,77 @@
 
 package MongoDB::OID;
 {
-  $MongoDB::OID::VERSION = '0.501.1';
+  $MongoDB::OID::VERSION = '0.502.0';
 }
 
 # ABSTRACT: A Mongo Object ID
 
-use Any::Moose;
+use Moose;
+
+
+has value => (
+    is      => 'ro',
+    isa     => 'Str',
+    required => 1,
+    builder => 'build_value',
+);
+
+sub BUILDARGS { 
+    my $class = shift; 
+    return $class->SUPER::BUILDARGS(flibble => @_)
+        if @_ % 2; 
+    return $class->SUPER::BUILDARGS(@_); 
+}
+
+sub build_value {
+    my $self = shift;
+
+    _build_value($self, @_ ? @_ : ());
+}
+
+
+sub to_string {
+    my ($self) = @_;
+    $self->value;
+}
+
+
+sub get_time {
+    my ($self) = @_;
+
+    my $ts = 0;
+    for (my $i = 0; $i<4; $i++) {
+        $ts = ($ts * 256) + hex(substr($self->value, $i*2, 2));
+    }
+    return $ts;
+}
+
+
+sub TO_JSON {
+    my ($self) = @_;
+    return {'$oid' => $self->value};
+}
+
+use overload
+    '""' => \&to_string,
+    'fallback' => 1;
+
+
+__PACKAGE__->meta->make_immutable;
+
+1;
+
+__END__
+
+=pod
 
 =head1 NAME
 
-MongoDB::OID - A Mongo ObjectId
+MongoDB::OID - A Mongo Object ID
+
+=head1 VERSION
+
+version 0.502.0
 
 =head1 SYNOPSIS
 
@@ -50,6 +111,10 @@ Now C<$id1> and C<$id2> will have the same value.
 
 OID generation is thread safe.
 
+=head1 NAME
+
+MongoDB::OID - A Mongo ObjectId
+
 =head1 SEE ALSO
 
 Core documentation on object ids: L<http://dochub.mongodb.org/core/objectids>.
@@ -63,28 +128,6 @@ It is a 24-character hexidecimal string (12 bytes).
 
 Its string representation is the 24-character string.
 
-=cut
-
-has value => (
-    is      => 'ro',
-    isa     => 'Str',
-    required => 1,
-    builder => 'build_value',
-);
-
-sub BUILDARGS { 
-    my $class = shift; 
-    return $class->SUPER::BUILDARGS(flibble => @_)
-        if @_ % 2; 
-    return $class->SUPER::BUILDARGS(@_); 
-}
-
-sub build_value {
-    my $self = shift;
-
-    _build_value($self, @_ ? @_ : ());
-}
-
 =head1 METHODS
 
 =head2 to_string
@@ -93,31 +136,12 @@ sub build_value {
 
 Gets the value of this OID as a 24-digit hexidecimal string.
 
-=cut
-
-sub to_string {
-    my ($self) = @_;
-    $self->value;
-}
-
 =head2 get_time
 
     my $date = DateTime->from_epoch(epoch => $id->get_time);
 
 Each OID contains a 4 bytes timestamp from when it was created.  This method
 extracts the timestamp.  
-
-=cut
-
-sub get_time {
-    my ($self) = @_;
-
-    my $ts = 0;
-    for (my $i = 0; $i<4; $i++) {
-        $ts = ($ts * 256) + hex(substr($self->value, $i*2, 2));
-    }
-    return $ts;
-}
 
 =head2 TO_JSON
 
@@ -132,22 +156,34 @@ representation used by MongoDB, that is, an OID with the value
 "012345678901234567890123" will be represented as 
 C<{"$oid" : "012345678901234567890123"}>.
 
-=cut
-
-sub TO_JSON {
-    my ($self) = @_;
-    return {'$oid' => $self->value};
-}
-
-use overload
-    '""' => \&to_string,
-    'fallback' => 1;
-
-no Any::Moose;
-__PACKAGE__->meta->make_immutable;
-
-1;
-
 =head1 AUTHOR
 
   Kristina Chodorow <kristina@mongodb.org>
+
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
+=cut

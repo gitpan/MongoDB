@@ -16,27 +16,15 @@
 
 package MongoDB::Code;
 {
-  $MongoDB::Code::VERSION = '0.501.1';
+  $MongoDB::Code::VERSION = '0.502.0';
 }
 
 
 # ABSTRACT: JavaScript Code
 
-=head1 NAME
 
-MongoDB::Code - JavaScript code
+use Moose;
 
-=cut
-
-use Any::Moose;
-
-=head1 ATTRIBUTES
-
-=head2 code
-
-A string of JavaScript code.
-
-=cut
 
 has code => (
     is       => 'ro',
@@ -44,11 +32,6 @@ has code => (
     required => 1,
 );
 
-=head2 scope
-
-An optional hash of variables to pass as the scope.
-
-=cut
 
 has scope => (
     is       => 'ro',
@@ -57,3 +40,57 @@ has scope => (
 );
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+MongoDB::Code - JavaScript Code
+
+=head1 VERSION
+
+version 0.502.0
+
+=head1 NAME
+
+MongoDB::Code - JavaScript code
+
+=head1 ATTRIBUTES
+
+=head2 code
+
+A string of JavaScript code.
+
+=head2 scope
+
+An optional hash of variables to pass as the scope.
+
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
+=cut

@@ -16,12 +16,41 @@
 
 package MongoDB::BSON;
 {
-  $MongoDB::BSON::VERSION = '0.501.1';
+  $MongoDB::BSON::VERSION = '0.502.0';
 }
 
 
 # ABSTRACT: Tools for serializing and deserializing data in BSON form
-use Any::Moose;
+use Moose;
+
+
+$MongoDB::BSON::looks_like_number = 0;
+
+
+$MongoDB::BSON::char = '$';
+
+
+$MongoDB::BSON::utf8_flag_on = 1;
+
+
+$MongoDB::BSON::use_boolean = 0;
+
+
+$MongoDB::BSON::use_binary = 0;
+
+1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+MongoDB::BSON - Tools for serializing and deserializing data in BSON form
+
+=head1 VERSION
+
+version 0.502.0
 
 =head1 NAME
 
@@ -44,20 +73,12 @@ If you do not set this, you may be using strings more often than you intend to.
 See the L<MongoDB::DataTypes> section for more info on the behavior of strings
 vs. numbers.
 
-=cut
-
-$MongoDB::BSON::looks_like_number = 0;
-
 =head2 char
 
     $MongoDB::BSON::char = ":";
     $collection->query({"x" => {":gt" => 4}});
 
 Can be used to set a character other than "$" to use for special operators.
-
-=cut
-
-$MongoDB::BSON::char = '$';
 
 =head2 Turn on/off UTF8 flag when return strings
 
@@ -77,10 +98,6 @@ NOTE:
 
 If you turn off utf8 flag, the string  length will compute as bytes, and is_utf8 will return false.
 
-=cut
-
-$MongoDB::BSON::utf8_flag_on = 1;
-
 =head2 Return boolean values as booleans instead of integers
 
     $MongoDB::BSON::use_boolean = 1
@@ -88,10 +105,6 @@ $MongoDB::BSON::utf8_flag_on = 1;
 By default, booleans are deserialized as integers.  If you would like them to be
 deserialized as L<boolean/true> and L<boolean/false>, set
 C<$MongoDB::BSON::use_boolean> to 1.
-
-=cut
-
-$MongoDB::BSON::use_boolean = 0;
 
 =head2 Return binary data as instances of L<MongoDB::BSON::Binary> instead of
 string refs.
@@ -102,8 +115,30 @@ For backwards compatibility, binary data is deserialized as a string ref.  If
 you would like to have it deserialized as instances of L<MongoDB::BSON::Binary>
 (to, say, preserve the subtype), set C<$MongoDB::BSON::use_binary> to 1.
 
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
 =cut
-
-$MongoDB::BSON::use_binary = 0;
-
-1;

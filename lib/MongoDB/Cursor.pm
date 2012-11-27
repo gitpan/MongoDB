@@ -16,76 +16,24 @@
 
 package MongoDB::Cursor;
 {
-  $MongoDB::Cursor::VERSION = '0.501.1';
+  $MongoDB::Cursor::VERSION = '0.502.0';
 }
 
 
 # ABSTRACT: A cursor/iterator for Mongo query results
-use Any::Moose;
+use Moose;
 use boolean;
 use Tie::IxHash;
 
-=head1 NAME
-
-MongoDB::Cursor - A cursor/iterator for Mongo query results
-
-=head1 SYNOPSIS
-
-    while (my $object = $cursor->next) {
-        ...
-    }
-
-    my @objects = $cursor->all;
-
-=head2 Multithreading
-
-Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
-will have to create their own database queries.
-
-=head1 SEE ALSO
-
-Core documentation on cursors: L<http://dochub.mongodb.org/core/cursors>.
-
-=cut
 
 $MongoDB::Cursor::_request_id = int(rand(1000000));
 
-=head1 STATIC ATTRIBUTES
-
-=head2 slave_okay
-
-    $MongoDB::Cursor::slave_okay = 1;
-
-Whether it is okay to run queries on the slave.  Defaults to 0.
-
-=cut
 
 $MongoDB::Cursor::slave_okay = 0;
 
-=head2 timeout
-
-B<Deprecated, use MongoDB::Connection::query_timeout instead.>
-
-How many milliseconds to wait for a response from the server.  Set to 30000
-(30 seconds) by default.  -1 waits forever (or until TCP times out, which is
-usually a long time).
-
-This value is overridden by C<MongoDB::Connection::query_timeout> and never
-used.
-
-=cut
 
 $MongoDB::Cursor::timeout = 30000;
 
-=head1 ATTRIBUTES
-
-=head2 started_iterating
-
-If this cursor has queried the database yet. Methods
-mofifying the query will complain if they are called
-after the database is queried.
-
-=cut
 
 has started_iterating => (
     is => 'rw',
@@ -94,9 +42,9 @@ has started_iterating => (
     default => 0,
 );
 
-has _connection => (
+has _client => (
     is => 'ro',
-    isa => 'MongoDB::Connection',
+    isa => 'MongoDB::MongoClient',
     required => 1,
 );
 
@@ -139,27 +87,9 @@ has _tailable => (
 );
 
 
-=head2 immortal
 
-    $cursor->immortal(1);
 
-Ordinarily, a cursor "dies" on the database server after a certain length of
-time (approximately 10 minutes), to prevent inactive cursors from hogging
-resources.  This option sets that a cursor should not die until all of its
-results have been fetched or it goes out of scope in Perl.
 
-Boolean value, defaults to 0.
-
-C<immortal> is not equivalent to setting a client-side timeout.  If you are
-getting client-side timeouts (e.g., "recv timed out"), set C<query_timeout> on
-your connection.
-
-    # wait forever for a query to return results
-    $connection->query_timeout(-1);
-
-See L<MongoDB::Connection/query_timeout>.
-
-=cut
 
 has immortal => (
     is => 'rw',
@@ -169,14 +99,6 @@ has immortal => (
 );
 
 
-=head2 partial
-
-If a shard is down, mongos will return an error when it tries to query that
-shard.  If this is set, mongos will just skip that shard, instead.
-
-Boolean value, defaults to 0.
-
-=cut
 
 has partial => (
     is => 'rw',
@@ -185,15 +107,6 @@ has partial => (
     default => 0,
 );
 
-=head2 slave_okay
-
-    $cursor->slave_okay(1);
-
-If a query can be done on a slave database server.
-
-Boolean value, defaults to 0.
-
-=cut
 
 has slave_okay => (
     is => 'rw',
@@ -216,9 +129,6 @@ has _request_id => (
     default => 0,
 );
 
-=head1 METHODS
-
-=cut
 
 sub _ensure_special {
     my ($self) = @_;
@@ -247,24 +157,12 @@ sub _do_query {
     my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit, $self->_query, $self->_fields);
     $self->_request_id($info->{'request_id'});
 
-    $self->_connection->send($query);
-    $self->_connection->recv($self);
+    $self->_client->send($query);
+    $self->_client->recv($self);
 
     $self->started_iterating(1);
 }
 
-=head2 fields (\%f)
-
-    $coll->insert({name => "Fred", age => 20});
-    my $cursor = $coll->query->fields({ name => 1 });
-    my $obj = $cursor->next;
-    $obj->{name}; "Fred"
-    $obj->{age}; # undef
-
-Selects which fields are returned.
-The default is all fields.  _id is always returned.
-
-=cut
 
 sub fields {
     my ($self, $f) = @_;
@@ -277,17 +175,6 @@ sub fields {
     return $self;
 }
 
-=head2 sort ($order)
-
-    # sort by name, descending
-    my $sort = {"name" => -1};
-    $cursor = $coll->query->sort($sort);
-
-Adds a sort to the query.  Argument is either
-a hash reference or a Tie::IxHash.
-Returns this cursor for chaining operations.
-
-=cut
 
 sub sort {
     my ($self, $order) = @_;
@@ -302,15 +189,6 @@ sub sort {
 }
 
 
-=head2 limit ($num)
-
-    $per_page = 20;
-    $cursor = $coll->query->limit($per_page);
-
-Returns a maximum of N results.
-Returns this cursor for chaining operations.
-
-=cut
 
 sub limit {
     my ($self, $num) = @_;
@@ -322,21 +200,6 @@ sub limit {
 }
 
 
-=head2 tailable ($bool)
-
-    $cursor->query->tailable(1);
-
-If a cursor should be tailable.  Tailable cursors can only be used on capped
-collections and are similar to the C<tail -f> command: they never die and keep
-returning new results as more is added to a collection.
-
-They are often used for getting log messages.
-
-Boolean value, defaults to 0.
-
-Returns this cursor for chaining operations.
-
-=cut
 
 sub tailable {
 	my($self, $bool) = @_;
@@ -349,17 +212,6 @@ sub tailable {
 
 
 
-=head2 skip ($num)
-
-    $page_num = 7;
-    $per_page = 100;
-    $cursor = $coll->query->limit($per_page)->skip($page_num * $per_page);
-
-Skips the first N results. Returns this cursor for chaining operations.
-
-See also core documentation on limit: L<http://dochub.mongodb.org/core/limit>.
-
-=cut
 
 sub skip {
     my ($self, $num) = @_;
@@ -370,20 +222,6 @@ sub skip {
     return $self;
 }
 
-=head2 snapshot
-
-    my $cursor = $coll->query->snapshot;
-
-Uses snapshot mode for the query.  Snapshot mode assures no
-duplicates are returned, or objects missed, which were present
-at both the start and end of the query's execution (if an object
-is new during the query, or deleted during the query, it may or
-may not be returned, even with snapshot mode).  Note that short
-query responses (less than 1MB) are always effectively
-snapshotted.  Currently, snapshot mode may not be used with
-sorting or explicit hints.
-
-=cut
 
 sub snapshot {
     my ($self) = @_;
@@ -395,13 +233,6 @@ sub snapshot {
     return $self;
 }
 
-=head2 hint
-
-    my $cursor = $coll->query->hint({'x' => 1});
-
-Force Mongo to use a specific index for a query.
-
-=cut
 
 sub hint {
     my ($self, $index) = @_;
@@ -415,21 +246,6 @@ sub hint {
     return $self;
 }
 
-=head2 explain
-
-    my $explanation = $cursor->explain;
-
-This will tell you the type of cursor used, the number of records the DB had to
-examine as part of this query, the number of records returned by the query, and
-the time in milliseconds the query took to execute.  Requires L<boolean> package.
-
-C<explain> resets the cursor, so calling C<next> or C<has_next> after an explain
-will requery the database.
-
-See also core documentation on explain:
-L<http://dochub.mongodb.org/core/explain>.
-
-=cut
 
 sub explain {
     my ($self) = @_;
@@ -449,16 +265,6 @@ sub explain {
     return $retval;
 }
 
-=head2 count($all?)
-
-    my $num = $cursor->count;
-    my $num = $cursor->skip(20)->count(1);
-
-Returns the number of document this query will return.  Optionally takes a
-boolean parameter, indicating that the cursor's limit and skip fields should be
-used in calculating the count.
-
-=cut
 
 sub count {
     my ($self, $all) = @_;
@@ -478,19 +284,236 @@ sub count {
         $cmd->Push(skip => $self->_skip) if $self->_skip;
     }
 
-    my $result = $self->_connection->get_database($db)->run_command($cmd);
+    my $result = $self->_client->get_database($db)->run_command($cmd);
 
     # returns "ns missing" if collection doesn't exist
     return 0 unless ref $result eq 'HASH';
     return $result->{'n'};
 }
 
+
+# shortcut to make some XS code saner
+sub _dt_type { 
+    my $self = shift;
+    return $self->_client->dt_type;
+}
+
+
+
+
+sub all {
+    my ($self) = @_;
+    my @ret;
+
+    while (my $entry = $self->next) {
+        push @ret, $entry;
+    }
+
+    return @ret;
+}
+
+
+__PACKAGE__->meta->make_immutable (inline_destructor => 0);
+
+1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+MongoDB::Cursor - A cursor/iterator for Mongo query results
+
+=head1 VERSION
+
+version 0.502.0
+
+=head1 SYNOPSIS
+
+    while (my $object = $cursor->next) {
+        ...
+    }
+
+    my @objects = $cursor->all;
+
+=head2 Multithreading
+
+Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
+will have to create their own database queries.
+
+=head1 NAME
+
+MongoDB::Cursor - A cursor/iterator for Mongo query results
+
+=head1 SEE ALSO
+
+Core documentation on cursors: L<http://dochub.mongodb.org/core/cursors>.
+
+=head1 STATIC ATTRIBUTES
+
+=head2 slave_okay
+
+    $MongoDB::Cursor::slave_okay = 1;
+
+Whether it is okay to run queries on the slave.  Defaults to 0.
+
+=head2 timeout
+
+B<Deprecated, use MongoDB::Connection::query_timeout instead.>
+
+How many milliseconds to wait for a response from the server.  Set to 30000
+(30 seconds) by default.  -1 waits forever (or until TCP times out, which is
+usually a long time).
+
+This value is overridden by C<MongoDB::Connection::query_timeout> and never
+used.
+
+=head1 ATTRIBUTES
+
+=head2 started_iterating
+
+If this cursor has queried the database yet. Methods
+mofifying the query will complain if they are called
+after the database is queried.
+
+=head2 immortal
+
+    $cursor->immortal(1);
+
+Ordinarily, a cursor "dies" on the database server after a certain length of
+time (approximately 10 minutes), to prevent inactive cursors from hogging
+resources.  This option sets that a cursor should not die until all of its
+results have been fetched or it goes out of scope in Perl.
+
+Boolean value, defaults to 0.
+
+C<immortal> is not equivalent to setting a client-side timeout.  If you are
+getting client-side timeouts (e.g., "recv timed out"), set C<query_timeout> on
+your connection.
+
+    # wait forever for a query to return results
+    $connection->query_timeout(-1);
+
+See L<MongoDB::Connection/query_timeout>.
+
+=head2 partial
+
+If a shard is down, mongos will return an error when it tries to query that
+shard.  If this is set, mongos will just skip that shard, instead.
+
+Boolean value, defaults to 0.
+
+=head2 slave_okay
+
+    $cursor->slave_okay(1);
+
+If a query can be done on a slave database server.
+
+Boolean value, defaults to 0.
+
+=head1 METHODS
+
+=head2 fields (\%f)
+
+    $coll->insert({name => "Fred", age => 20});
+    my $cursor = $coll->query->fields({ name => 1 });
+    my $obj = $cursor->next;
+    $obj->{name}; "Fred"
+    $obj->{age}; # undef
+
+Selects which fields are returned.
+The default is all fields.  _id is always returned.
+
+=head2 sort ($order)
+
+    # sort by name, descending
+    my $sort = {"name" => -1};
+    $cursor = $coll->query->sort($sort);
+
+Adds a sort to the query.  Argument is either
+a hash reference or a Tie::IxHash.
+Returns this cursor for chaining operations.
+
+=head2 limit ($num)
+
+    $per_page = 20;
+    $cursor = $coll->query->limit($per_page);
+
+Returns a maximum of N results.
+Returns this cursor for chaining operations.
+
+=head2 tailable ($bool)
+
+    $cursor->query->tailable(1);
+
+If a cursor should be tailable.  Tailable cursors can only be used on capped
+collections and are similar to the C<tail -f> command: they never die and keep
+returning new results as more is added to a collection.
+
+They are often used for getting log messages.
+
+Boolean value, defaults to 0.
+
+Returns this cursor for chaining operations.
+
+=head2 skip ($num)
+
+    $page_num = 7;
+    $per_page = 100;
+    $cursor = $coll->query->limit($per_page)->skip($page_num * $per_page);
+
+Skips the first N results. Returns this cursor for chaining operations.
+
+See also core documentation on limit: L<http://dochub.mongodb.org/core/limit>.
+
+=head2 snapshot
+
+    my $cursor = $coll->query->snapshot;
+
+Uses snapshot mode for the query.  Snapshot mode assures no
+duplicates are returned, or objects missed, which were present
+at both the start and end of the query's execution (if an object
+is new during the query, or deleted during the query, it may or
+may not be returned, even with snapshot mode).  Note that short
+query responses (less than 1MB) are always effectively
+snapshotted.  Currently, snapshot mode may not be used with
+sorting or explicit hints.
+
+=head2 hint
+
+    my $cursor = $coll->query->hint({'x' => 1});
+
+Force Mongo to use a specific index for a query.
+
+=head2 explain
+
+    my $explanation = $cursor->explain;
+
+This will tell you the type of cursor used, the number of records the DB had to
+examine as part of this query, the number of records returned by the query, and
+the time in milliseconds the query took to execute.  Requires L<boolean> package.
+
+C<explain> resets the cursor, so calling C<next> or C<has_next> after an explain
+will requery the database.
+
+See also core documentation on explain:
+L<http://dochub.mongodb.org/core/explain>.
+
+=head2 count($all?)
+
+    my $num = $cursor->count;
+    my $num = $cursor->skip(20)->count(1);
+
+Returns the number of document this query will return.  Optionally takes a
+boolean parameter, indicating that the cursor's limit and skip fields should be
+used in calculating the count.
+
 =head2 reset
 
 Resets the cursor.  After being reset, pre-query methods can be
 called on the cursor (sort, limit, etc.) and subsequent calls to
 next, has_next, or all will re-query the database.
-
 
 =head2 has_next
 
@@ -499,7 +522,6 @@ next, has_next, or all will re-query the database.
     }
 
 Checks if there is another result to fetch.
-
 
 =head2 next
 
@@ -548,24 +570,34 @@ The index of the result that the current batch of results starts at.
 
 Returns a list of all objects in the result.
 
-=cut
-
-sub all {
-    my ($self) = @_;
-    my @ret;
-
-    while (my $entry = $self->next) {
-        push @ret, $entry;
-    }
-
-    return @ret;
-}
-
-no Any::Moose;
-__PACKAGE__->meta->make_immutable (inline_destructor => 0);
-
-1;
-
 =head1 AUTHOR
 
   Kristina Chodorow <kristina@mongodb.org>
+
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
+=cut

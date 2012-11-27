@@ -14,14 +14,14 @@ eval {
     if (exists $ENV{MONGOD}) {
         $host = $ENV{MONGOD};
     }
-    $conn = MongoDB::MongoClient->new(host => $host, ssl => $ENV{MONGO_SSL});
+    $conn = MongoDB::Connection->new(host => $host, ssl => $ENV{MONGO_SSL});
 };
 
 if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 20;
+    plan tests => 22;
 }
 
 throws_ok {
@@ -95,6 +95,12 @@ is($result->{'ok'}, 1, 'db was dropped');
     $db->drop;
 }
 
+# autoload
+{
+    my $db1;
+    warning_like { $db1 = $conn->foo; } qr/database method names are deprecated/i, 'AUTOLOAD warning';
+    is($db1->name, "foo");
+}
 
 # query_timeout
 {

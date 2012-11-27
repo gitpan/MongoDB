@@ -16,22 +16,63 @@
 
 package MongoDB::BSON::Binary;
 {
-  $MongoDB::BSON::Binary::VERSION = '0.501.1';
+  $MongoDB::BSON::Binary::VERSION = '0.502.0';
 }
 
 
 # ABSTRACT: Binary type
 
-use Any::Moose;
+use Moose;
+
+
+use constant {
+    SUBTYPE_GENERIC            => 0,
+    SUBTYPE_FUNCTION           => 1,
+    SUBTYPE_GENERIC_DEPRECATED => 2,
+    SUBTYPE_UUID_DEPRECATED    => 3,
+    SUBTYPE_UUID               => 4,
+    SUBTYPE_MD5                => 5,
+    SUBTYPE_USER_DEFINED       => 128
+};
+
+
+has data => (
+    is => 'ro',
+    isa => 'Str',
+    required => 1
+);
+
+
+has subtype => (
+    is => 'ro',
+    isa => 'Int',
+    required => 0,
+    default => MongoDB::BSON::Binary->SUBTYPE_GENERIC
+);
+
+
+1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+MongoDB::BSON::Binary - Binary type
+
+=head1 VERSION
+
+version 0.502.0
+
+=head1 SYNOPSIS
+
+Creates an instance of binary data with a specific subtype.
 
 =head1 NAME
 
 MongoDB::BSON::Binary - A type that can be used to send binary data to the
 database
-
-=head1 SYNOPSIS
-
-Creates an instance of binary data with a specific subtype.
 
 =head1 EXAMPLE
 
@@ -75,42 +116,13 @@ differently based on type.
 
 =back
 
-=cut
-
-use constant {
-    SUBTYPE_GENERIC            => 0,
-    SUBTYPE_FUNCTION           => 1,
-    SUBTYPE_GENERIC_DEPRECATED => 2,
-    SUBTYPE_UUID_DEPRECATED    => 3,
-    SUBTYPE_UUID               => 4,
-    SUBTYPE_MD5                => 5,
-    SUBTYPE_USER_DEFINED       => 128
-};
-
 =head2 data
 
 A string of binary data.
 
-=cut
-
-has data => (
-    is => 'ro',
-    isa => 'Str',
-    required => 1
-);
-
 =head2 subtype
 
 A subtype.  Defaults to C<SUBTYPE_GENERIC>.
-
-=cut
-
-has subtype => (
-    is => 'ro',
-    isa => 'Int',
-    required => 0,
-    default => MongoDB::BSON::Binary->SUBTYPE_GENERIC
-);
 
 =head2 Why is C<SUBTYPE_GENERIC_DEPRECATED> deprecated?
 
@@ -136,7 +148,30 @@ subtype for UUID to the universal format.
 This should not affect Perl users at all, as Perl does not deserialize it into
 any native UUID type.
 
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
 =cut
-
-1;
-

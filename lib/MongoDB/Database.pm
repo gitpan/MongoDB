@@ -16,46 +16,21 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.501.1';
+  $MongoDB::Database::VERSION = '0.502.0';
 }
 
 
 # ABSTRACT: A Mongo Database
 
-use Any::Moose;
+use Moose;
 use MongoDB::GridFS;
+use Carp 'carp';
 
-has _connection => (
+has _client => ( 
     is       => 'ro',
-    isa      => 'MongoDB::Connection',
+    isa      => 'MongoDB::MongoClient',
     required => 1,
 );
-
-=head1 NAME
-
-MongoDB::Database - A Mongo database
-
-=head1 SYNOPSIS
-
-The MongoDB::Database class accesses to a database.
-
-    # accesses the foo database
-    my $db = $connection->foo;
-
-You can also access databases with the L<MongoDB::Connection/"get_database($name)">
-method.
-
-=head1 SEE ALSO
-
-Core documentation on databases: L<http://dochub.mongodb.org/core/databases>.
-
-=head1 ATTRIBUTES
-
-=head2 name
-
-The name of the database.
-
-=cut
 
 has name => (
     is       => 'ro',
@@ -71,23 +46,11 @@ sub AUTOLOAD {
     my $coll = $AUTOLOAD;
     $coll =~ s/.*:://;
 
+    carp sprintf q{AUTOLOADed collection method names are deprecated and will be removed in a future release. Use $db->get_collection( '%s' ) instead.}, $coll;
+
     return $self->get_collection($coll);
 }
 
-sub BUILD {
-    my ($self) = @_;
-    Any::Moose::load_class("MongoDB::Collection");
-}
-
-=head1 METHODS
-
-=head2 collection_names
-
-    my @collections = $database->collection_names;
-
-Returns the list of collections in this database.
-
-=cut
 
 sub collection_names {
     my ($self) = @_;
@@ -97,14 +60,6 @@ sub collection_names {
     } map { $_->{name} } $it->all;
 }
 
-=head2 get_collection ($name)
-
-    my $collection = $database->get_collection('foo');
-
-Returns a L<MongoDB::Collection> for the collection called C<$name> within this
-database.
-
-=cut
 
 sub get_collection {
     my ($self, $collection_name) = @_;
@@ -114,17 +69,6 @@ sub get_collection {
     );
 }
 
-=head2 get_gridfs ($prefix?)
-
-    my $grid = $database->get_gridfs;
-
-Returns a L<MongoDB::GridFS> for storing and retrieving files from the database.
-Default prefix is "fs", making C<$grid-E<gt>files> "fs.files" and C<$grid-E<gt>chunks>
-"fs.chunks".
-
-See L<MongoDB::GridFS> for more information.
-
-=cut
 
 sub get_gridfs {
     my ($self, $prefix) = @_;
@@ -136,19 +80,122 @@ sub get_gridfs {
     );
 }
 
-=head2 drop
-
-    $database->drop;
-
-Deletes the database.
-
-=cut
 
 sub drop {
     my ($self) = @_;
     return $self->run_command({ 'dropDatabase' => 1 });
 }
 
+
+sub last_error {
+    my ($self, $options) = @_;
+
+    my $cmd = Tie::IxHash->new("getlasterror" => 1);
+    if ($options) {
+        $cmd->Push("w", $options->{w})                  if $options->{w};
+        $cmd->Push("wtimeout", $options->{wtimeout})    if $options->{wtimeout};
+        $cmd->Push("fsync", $options->{fsync})          if $options->{fsync};
+        $cmd->Push("j", 1)                              if $options->{j};
+    }
+                                                        
+    return $self->run_command($cmd);
+}
+
+
+sub run_command {
+    my ($self, $command) = @_;
+    my $obj = $self->get_collection('$cmd')->find_one($command);
+    return $obj if $obj->{ok};
+    $obj->{'errmsg'};
+}
+
+
+sub eval {
+    my ($self, $code, $args) = @_;
+
+    my $cmd = tie(my %hash, 'Tie::IxHash');
+    %hash = ('$eval' => $code,
+             'args' => $args);
+
+    my $result = $self->run_command($cmd);
+    if (ref $result eq 'HASH' && exists $result->{'retval'}) {
+        return $result->{'retval'};
+    }
+    else {
+        return $result;
+    }
+}
+
+__PACKAGE__->meta->make_immutable;
+
+1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+MongoDB::Database - A Mongo Database
+
+=head1 VERSION
+
+version 0.502.0
+
+=head1 SYNOPSIS
+
+The MongoDB::Database class accesses to a database.
+
+    # accesses the foo database
+    my $db = $connection->foo;
+
+You can also access databases with the L<MongoDB::Connection/"get_database($name)">
+method.
+
+=head1 NAME
+
+MongoDB::Database - A Mongo database
+
+=head1 SEE ALSO
+
+Core documentation on databases: L<http://dochub.mongodb.org/core/databases>.
+
+=head1 ATTRIBUTES
+
+=head2 name
+
+The name of the database.
+
+=head1 METHODS
+
+=head2 collection_names
+
+    my @collections = $database->collection_names;
+
+Returns the list of collections in this database.
+
+=head2 get_collection ($name)
+
+    my $collection = $database->get_collection('foo');
+
+Returns a L<MongoDB::Collection> for the collection called C<$name> within this
+database.
+
+=head2 get_gridfs ($prefix?)
+
+    my $grid = $database->get_gridfs;
+
+Returns a L<MongoDB::GridFS> for storing and retrieving files from the database.
+Default prefix is "fs", making C<$grid-E<gt>files> "fs.files" and C<$grid-E<gt>chunks>
+"fs.chunks".
+
+See L<MongoDB::GridFS> for more information.
+
+=head2 drop
+
+    $database->drop;
+
+Deletes the database.
 
 =head2 last_error($options?)
 
@@ -178,6 +225,10 @@ C<w> copies cannot be made.
 =item fsync
 
 If true, the database will fsync to disk before returning.
+
+=item j
+
+If true, awaits the journal commit before returning. If the server is running without journaling, it returns immediately, and successfully.
 
 =back
 
@@ -254,22 +305,6 @@ occurred).
 
 See L<MongoDB::Connection/w> for more information.
 
-=cut
-
-sub last_error {
-    my ($self, $options) = @_;
-
-    my $cmd = Tie::IxHash->new("getlasterror" => 1);
-    if ($options) {
-        $cmd->Push("w", $options->{w}) if $options->{w};
-        $cmd->Push("wtimeout", $options->{wtimeout}) if $options->{wtimeout};
-        $cmd->Push("fsync", $options->{fsync}) if $options->{fsync};
-    }
-
-    return $self->run_command($cmd);
-}
-
-
 =head2 run_command ($command)
 
     my $result = $database->run_command({ some_command => 1 });
@@ -286,16 +321,6 @@ L<MongoDB::Examples/"DATABASE COMMANDS"> section.
 See also core documentation on database commands:
 L<http://dochub.mongodb.org/core/commands>.
 
-=cut
-
-sub run_command {
-    my ($self, $command) = @_;
-    my $obj = $self->get_collection('$cmd')->find_one($command);
-    return $obj if $obj->{ok};
-    $obj->{'errmsg'};
-}
-
-
 =head2 eval ($code, $args?)
 
     my $result = $database->eval('function(x) { return "hello, "+x; }', ["world"]);
@@ -310,29 +335,30 @@ must be a JavaScript function. C<$args> is an array of parameters that will be
 passed to the function.  For more examples of using eval see
 L<http://www.mongodb.org/display/DOCS/Server-side+Code+Execution#Server-sideCodeExecution-Using{{db.eval%28%29}}>.
 
+=head1 AUTHORS
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Mike Friedman <mike.friedman@10gen.com>
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2012 by 10gen, Inc..
+
+This is free software, licensed under:
+
+  The Apache License, Version 2.0, January 2004
+
 =cut
-
-sub eval {
-    my ($self, $code, $args) = @_;
-
-    my $cmd = tie(my %hash, 'Tie::IxHash');
-    %hash = ('$eval' => $code,
-             'args' => $args);
-
-    my $result = $self->run_command($cmd);
-    if (ref $result eq 'HASH' && exists $result->{'retval'}) {
-        return $result->{'retval'};
-    }
-    else {
-        return $result;
-    }
-}
-
-no Any::Moose;
-__PACKAGE__->meta->make_immutable;
-
-1;
-
-=head1 AUTHOR
-
-  Kristina Chodorow <kristina@mongodb.org>

@@ -16,7 +16,7 @@
 
 package MongoDB::Timestamp;
 {
-  $MongoDB::Timestamp::VERSION = '0.502.1';
+  $MongoDB::Timestamp::VERSION = '0.503.1';
 }
 
 
@@ -51,7 +51,7 @@ MongoDB::Timestamp - Replication timestamp
 
 =head1 VERSION
 
-version 0.502.1
+version 0.503.1
 
 =head1 SYNOPSIS
 

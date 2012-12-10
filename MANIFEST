@@ -1,3 +1,4 @@
+CONTRIBUTING.md
 Changes
 LICENSE
 MANIFEST
@@ -7,7 +8,18 @@ Makefile.PL
 README
 dist.ini
 ext/Module/Install/PRIVATE/Mongo.pm
-foo
+inc/Module/AutoInstall.pm
+inc/Module/Install.pm
+inc/Module/Install/AutoInstall.pm
+inc/Module/Install/Base.pm
+inc/Module/Install/Can.pm
+inc/Module/Install/Fetch.pm
+inc/Module/Install/Include.pm
+inc/Module/Install/Makefile.pm
+inc/Module/Install/Metadata.pm
+inc/Module/Install/PRIVATE/Mongo.pm
+inc/Module/Install/Win32.pm
+inc/Module/Install/WriteAll.pm
 lib/MongoDB.pm
 lib/MongoDB/BSON.pm
 lib/MongoDB/BSON/Binary.pm
@@ -22,7 +34,6 @@ lib/MongoDB/GridFS.pm
 lib/MongoDB/GridFS/File.pm
 lib/MongoDB/Indexing.pod
 lib/MongoDB/MongoClient.pm
-lib/MongoDB/MongoClient.pm~
 lib/MongoDB/OID.pm
 lib/MongoDB/Timestamp.pm
 lib/MongoDB/Tutorial.pod
@@ -38,6 +49,8 @@ t/connection.t
 t/cursor.t
 t/database.t
 t/db.t
+t/delegation.t
+t/delegation.t~
 t/dt_types.t
 t/fsync.t
 t/gridfs.t
@@ -47,9 +60,7 @@ t/isUTF8.t
 t/memtest.pl
 t/old_conn_collection.t
 t/old_conn_connection.t
-t/old_conn_connection.t~
 t/old_conn_database.t
-t/old_conn_database.t~
 t/old_conn_regex.t
 t/regex.t
 t/rs.pl

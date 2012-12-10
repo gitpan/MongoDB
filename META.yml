@@ -28,7 +28,7 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.300023, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Dist::Zilla version 4.300028, CPAN::Meta::Converter version 2.120921'
 license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -59,4 +59,4 @@ resources:
   bugtracker: https://jira.mongodb.org/browse/PERL
   homepage: https://github.com/mongodb/mongo-perl-driver
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.502.1
+version: 0.503.1

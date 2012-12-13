@@ -16,7 +16,7 @@
 
 package MongoDB::BSON::Binary;
 {
-  $MongoDB::BSON::Binary::VERSION = '0.503.1';
+  $MongoDB::BSON::Binary::VERSION = '0.503.2';
 }
 
 
@@ -63,7 +63,7 @@ MongoDB::BSON::Binary - Binary type
 
 =head1 VERSION
 
-version 0.503.1
+version 0.503.2
 
 =head1 SYNOPSIS
 

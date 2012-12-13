@@ -16,7 +16,7 @@
 
 package MongoDB::MongoClient;
 {
-  $MongoDB::MongoClient::VERSION = '0.503.1';
+  $MongoDB::MongoClient::VERSION = '0.503.2';
 }
 
 # ABSTRACT: A connection to a Mongo server
@@ -171,14 +171,31 @@ sub BUILD {
 
     my @pairs;
 
-    # deprecated syntax
-    if (!($self->host =~ /^mongodb:\/\//)) {
-        push @pairs, $self->host.":".$self->port;
+    # supported syntax (see http://docs.mongodb.org/manual/reference/connection-string/)
+    if ($self->host =~ m{ ^
+            mongodb://
+            (?: ([^:]*) : ([^@]*) @ )? # [username:password@]
+            ([^/]*) # host1[:port1][,host2[:port2],...[,hostN[:portN]]]
+            (?:
+                / ([^?]*) # /[database]
+                (?: [?] (.*) )? # [?options]
+            )?
+            $ }x) {
+        my ($username, $password, $hostpairs, $database, $options) = ($1, $2, $3, $4, $5);
+
+        # we add these things to $opts as well as self so that they get propagated when we recurse for multiple servers
+        $self->username($opts->{username} = $username) if $username;
+        $self->password($opts->{password} = $password) if $password;
+        $self->db_name($opts->{db_name} = $database) if $database;
+
+        $hostpairs = 'localhost' unless $hostpairs;
+        @pairs =  map { $_ .= ':27017' unless $_ =~ /:/ ; $_ } split ',', $hostpairs;
+
+        # TODO handle standard options from $options
     }
-    # supported syntax
+    # deprecated syntax
     else {
-        my $str = substr $self->host, 10;
-        @pairs =  map { $_ .= ":27017" unless $_ =~ /:/ ; $_ } split ",", $str;
+        push @pairs, $self->host.":".$self->port;
     }
 
     # a simple single server is special-cased (so we don't recurse forever)
@@ -431,7 +448,7 @@ MongoDB::MongoClient - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.503.1
+version 0.503.2
 
 =head1 SYNOPSIS
 

@@ -16,7 +16,7 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.503.1';
+  $MongoDB::Database::VERSION = '0.503.2';
 }
 
 
@@ -140,7 +140,7 @@ MongoDB::Database - A Mongo Database
 
 =head1 VERSION
 
-version 0.503.1
+version 0.503.2
 
 =head1 SYNOPSIS
 

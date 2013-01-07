@@ -49,7 +49,6 @@
       },
       "test" : {
          "requires" : {
-            "Any::Moose" : "0",
             "Config" : "0",
             "Data::Dump" : "0",
             "Data::Dumper" : "0",
@@ -84,6 +83,6 @@
          "web" : "https://github.com/mongodb/mongo-perl-driver"
       }
    },
-   "version" : "0.503.2"
+   "version" : "0.503.3"
 }
 

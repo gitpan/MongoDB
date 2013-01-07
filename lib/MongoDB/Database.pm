@@ -16,7 +16,7 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.503.2';
+  $MongoDB::Database::VERSION = '0.503.3';
 }
 
 
@@ -140,7 +140,7 @@ MongoDB::Database - A Mongo Database
 
 =head1 VERSION
 
-version 0.503.2
+version 0.503.3
 
 =head1 SYNOPSIS
 
@@ -355,7 +355,7 @@ Mike Friedman <mike.friedman@10gen.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2012 by 10gen, Inc..
+This software is Copyright (c) 2013 by 10gen, Inc..
 
 This is free software, licensed under:
 

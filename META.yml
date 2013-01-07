@@ -5,7 +5,6 @@ author:
   - 'Kristina Chodorow <kristina@mongodb.org>'
   - 'Mike Friedman <mike.friedman@10gen.com>'
 build_requires:
-  Any::Moose: 0
   Config: 0
   Data::Dump: 0
   Data::Dumper: 0
@@ -59,4 +58,4 @@ resources:
   bugtracker: https://jira.mongodb.org/browse/PERL
   homepage: https://github.com/mongodb/mongo-perl-driver
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.503.2
+version: 0.503.3

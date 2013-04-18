@@ -16,7 +16,7 @@
 
 package MongoDB::Cursor;
 {
-  $MongoDB::Cursor::VERSION = '0.503.3';
+  $MongoDB::Cursor::VERSION = '0.700.0';
 }
 
 
@@ -239,7 +239,7 @@ sub hint {
     confess "cannot set hint after querying"
 	if $self->started_iterating;
     confess 'not a hash reference'
-	unless ref $index eq 'HASH';
+    	unless ref $index eq 'HASH' || ref $index eq 'Tie::IxHash';
 
     $self->_ensure_special;
     $self->_query->{'$hint'} = $index;
@@ -298,6 +298,10 @@ sub _dt_type {
     return $self->_client->dt_type;
 }
 
+sub _inflate_dbrefs {
+    my $self = shift;
+    return $self->_client->inflate_dbrefs;
+}
 
 
 
@@ -327,7 +331,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 

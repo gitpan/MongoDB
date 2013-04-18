@@ -16,7 +16,7 @@
 
 package MongoDB::GridFS::File;
 {
-  $MongoDB::GridFS::File::VERSION = '0.503.3';
+  $MongoDB::GridFS::File::VERSION = '0.700.0';
 }
 
 
@@ -121,7 +121,7 @@ MongoDB::GridFS::File - A Mongo GridFS file
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 

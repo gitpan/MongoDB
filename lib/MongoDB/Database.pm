@@ -16,7 +16,7 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.503.3';
+  $MongoDB::Database::VERSION = '0.700.0';
 }
 
 
@@ -140,7 +140,7 @@ MongoDB::Database - A Mongo Database
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 
@@ -273,7 +273,7 @@ this field is set, it will be a string describing the error that occurred.
 
 =item C<n>
 
-If the last operation was an insert, an update or a remove, the number of
+If the last operation was an update, upsert, or a remove, the number of
 objects affected will be returned.
 
 =item C<wtimeout>
@@ -313,7 +313,7 @@ Runs a database command. Returns a string with the error message if the
 command fails. Returns the result of the command (a hash reference) on success.
 For a list of possible database commands, run:
 
-    my $commands = $db->run_command({listCommands : 1});
+    my $commands = $db->run_command({listCommands => 1});
 
 There are a few examples of database commands in the
 L<MongoDB::Examples/"DATABASE COMMANDS"> section.

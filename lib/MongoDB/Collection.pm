@@ -16,7 +16,7 @@
 
 package MongoDB::Collection;
 {
-  $MongoDB::Collection::VERSION = '0.503.3';
+  $MongoDB::Collection::VERSION = '0.700.0';
 }
 
 
@@ -476,7 +476,7 @@ MongoDB::Collection - A Mongo Collection
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 

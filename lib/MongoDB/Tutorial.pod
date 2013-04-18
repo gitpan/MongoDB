@@ -12,7 +12,7 @@ MongoDB::Tutorial - Getting started with MongoDB
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 DESCRIPTION
 
@@ -127,8 +127,6 @@ You can match array elements in your queries; for example, to find all users who
 like math:
 
     my $geeks = $users->find({"likes" => "math"});
-
-=head3
 
 This being Perl, it is important to mention that you can also use regular
 expressions to search for strings.  If you wanted to find all users with the

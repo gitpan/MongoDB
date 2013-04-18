@@ -27,6 +27,8 @@ lib/MongoDB/Code.pm
 lib/MongoDB/Collection.pm
 lib/MongoDB/Connection.pm
 lib/MongoDB/Cursor.pm
+lib/MongoDB/DBRef.pm
+lib/MongoDB/DBRef.pm~
 lib/MongoDB/DataTypes.pod
 lib/MongoDB/Database.pm
 lib/MongoDB/Examples.pod
@@ -49,6 +51,8 @@ t/connection.t
 t/cursor.t
 t/database.t
 t/db.t
+t/dbref.t
+t/dbref.t~
 t/delegation.t
 t/delegation.t~
 t/dt_types.t

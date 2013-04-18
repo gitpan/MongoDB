@@ -224,17 +224,19 @@ next (self)
     PREINIT:
         mongo_cursor *cursor;
         SV *dt_type_sv;
+        SV *inflate_dbrefs_sv;
+        SV *client_sv;
     CODE:
         cursor = get_cursor(self);
         if (has_next(self, cursor)) {
-          dt_type_sv = perl_mongo_call_reader( self, "_dt_type" );
-          if ( SvOK( dt_type_sv ) ) { 
-            char *dt_type = SvPV( dt_type_sv, SvLEN( dt_type_sv ) );
-            RETVAL = perl_mongo_bson_to_sv(&cursor->buf, dt_type);
-          } else { 
-            // dt type is undef
-            RETVAL = perl_mongo_bson_to_sv(&cursor->buf, NULL);
-          }
+          dt_type_sv          = perl_mongo_call_reader( self, "_dt_type" );
+          inflate_dbrefs_sv   = perl_mongo_call_reader( self, "_inflate_dbrefs" );
+          client_sv           = perl_mongo_call_reader( self, "_client" );
+          char *dt_type       = SvOK( dt_type_sv ) ? SvPV( dt_type_sv, SvLEN( dt_type_sv ) ) : NULL;
+          int  inflate_dbrefs = SvIV( inflate_dbrefs_sv );
+
+          RETVAL = perl_mongo_bson_to_sv( &cursor->buf, dt_type, inflate_dbrefs, client_sv );
+
           cursor->at++;
 
           if (cursor->num == 1 &&

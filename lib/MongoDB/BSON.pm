@@ -16,7 +16,7 @@
 
 package MongoDB::BSON;
 {
-  $MongoDB::BSON::VERSION = '0.503.3';
+  $MongoDB::BSON::VERSION = '0.700.0';
 }
 
 
@@ -50,7 +50,7 @@ MongoDB::BSON - Tools for serializing and deserializing data in BSON form
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 NAME
 

@@ -14,13 +14,13 @@
 #  limitations under the License.
 #
 
-use v5.10.0;
+use v5.8.0;
 use strict;
 use warnings;
 
 package MongoDB;
 {
-  $MongoDB::VERSION = '0.503.3';
+  $MongoDB::VERSION = '0.700.0';
 }
 # ABSTRACT: A Mongo Driver for Perl
 
@@ -29,7 +29,8 @@ use MongoDB::Connection;
 use MongoDB::MongoClient;
 use MongoDB::Database;
 use MongoDB::Collection;
-
+use MongoDB::DBRef;
+use MongoDB::OID;
 
 XSLoader::load(__PACKAGE__, $MongoDB::VERSION, int rand(2 ** 24));
 
@@ -45,7 +46,7 @@ MongoDB - A Mongo Driver for Perl
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 

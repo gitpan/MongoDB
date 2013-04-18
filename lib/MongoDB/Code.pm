@@ -16,7 +16,7 @@
 
 package MongoDB::Code;
 {
-  $MongoDB::Code::VERSION = '0.503.3';
+  $MongoDB::Code::VERSION = '0.700.0';
 }
 
 
@@ -51,7 +51,7 @@ MongoDB::Code - JavaScript Code
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 NAME
 

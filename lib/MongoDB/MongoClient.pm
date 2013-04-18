@@ -16,7 +16,7 @@
 
 package MongoDB::MongoClient;
 {
-  $MongoDB::MongoClient::VERSION = '0.503.3';
+  $MongoDB::MongoClient::VERSION = '0.700.0';
 }
 
 # ABSTRACT: A connection to a Mongo server
@@ -163,6 +163,12 @@ has dt_type => (
     default  => 'DateTime'
 );
 
+has inflate_dbrefs => (
+    is        => 'rw',
+    isa       => 'Bool',
+    required  => 0,
+    default   => 1
+);
 
 sub BUILD {
     my ($self, $opts) = @_;
@@ -177,7 +183,7 @@ sub BUILD {
             (?: ([^:]*) : ([^@]*) @ )? # [username:password@]
             ([^/]*) # host1[:port1][,host2[:port2],...[,hostN[:portN]]]
             (?:
-                / ([^?]*) # /[database]
+               / ([^?]*) # /[database]
                 (?: [?] (.*) )? # [?options]
             )?
             $ }x) {
@@ -387,7 +393,7 @@ sub get_master {
 sub authenticate {
     my ($self, $dbname, $username, $password, $is_digest) = @_;
     my $hash = $password;
-
+    
     # create a hash if the password isn't yet encrypted
     if (!$is_digest) {
         $hash = Digest::MD5::md5_hex("${username}:mongo:${password}");
@@ -410,7 +416,7 @@ sub authenticate {
              nonce => $nonce,
              key => $digest);
     $result = $db->run_command($login);
-
+    
     return $result;
 }
 
@@ -418,8 +424,8 @@ sub authenticate {
 sub fsync {
     my ($self, $args) = @_;
 	
-	$args //= {};
-	
+	$args ||= {};
+
     # Pass this in as array-ref to ensure that 'fsync => 1' is the first argument.
     return $self->get_database('admin')->run_command([fsync => 1, %$args]);
 }
@@ -430,11 +436,9 @@ sub fsync_unlock {
     # Have to fetch from a special collection to unlock.
     return $self->get_database('admin')->get_collection('$cmd.sys.unlock')->find_one();
 }
-	
 
 
-
-__PACKAGE__->meta->make_immutable (inline_destructor => 0);
+__PACKAGE__->meta->make_immutable( inline_destructor => 0 );
 
 1;
 
@@ -448,7 +452,7 @@ MongoDB::MongoClient - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 
@@ -517,18 +521,25 @@ The client I<write concern>.
 
 =over 4
 
-=item C<-1> Errors ignored. Do not use this.
-=item C<0> Unacknowledged. MongoClient will B<NOT> wait for an acknowledgment that 
+=item * C<-1> Errors ignored. Do not use this.
+
+=item * C<0> Unacknowledged. MongoClient will B<NOT> wait for an acknowledgment that 
 the server has received and processed the request. Older documentation may refer
 to this as "fire-and-forget" mode. You must call C<getLastError> manually to check
 if a request succeeds. This option is not recommended.
-=item C<1> Acknowledged. This is the default. MongoClient will wait until the 
+
+=item * C<1> Acknowledged. This is the default. MongoClient will wait until the 
 primary MongoDB acknowledges the write.
-=item C<2> Replica acknowledged. MongoClient will wait until at least two 
+
+=item * C<2> Replica acknowledged. MongoClient will wait until at least two 
 replicas (primary and one secondary) acknowledge the write. You can set a higher 
 number for more replicas.
-=item C<all> All replicas acknowledged.
-=item C<majority> A majority of replicas acknowledged.
+
+=item * C<all> All replicas acknowledged.
+
+=item * C<majority> A majority of replicas acknowledged.
+
+=back
 
 In MongoDB v2.0+, you can "tag" replica members. With "tagging" you can specify a 
 new "getLastErrorMode" where you can create new
@@ -656,6 +667,12 @@ Sets the type of object which is returned for DateTime fields. The default is L<
 acceptable values are L<DateTime::Tiny> and C<undef>. The latter will give you the raw epoch value
 rather than an object.
 
+=head2 inflate_dbrefs
+
+Controls whether L<DBRef|http://docs.mongodb.org/manual/applications/database-references/#dbref>s 
+are automatically inflated into L<MongoDB::DBRef> objects. Defaults to true.
+Set this to C<0> if you don't want to auto-inflate them.
+
 =head1 METHODS
 
 =head2 connect
@@ -716,7 +733,7 @@ C<MongoDB::Cursor>.  At the moment, the only required field for C<$info> is
 "ns", although "request_id" is likely to be required in the future.  The
 C<$info> hash will be automatically created for you by L<MongoDB::write_query>.
 
-=head fsync(\%args)
+=head2 fsync(\%args)
 
     $client->fsync();
 
@@ -730,7 +747,7 @@ The primary use of fsync is to lock the database during backup operations. This 
 
     $conn->fsync({lock => 1});
 
-=head fsync_unlock()
+=head2 fsync_unlock
 
     $conn->fsync_unlock();
 

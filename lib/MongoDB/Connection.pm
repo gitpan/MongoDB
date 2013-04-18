@@ -16,7 +16,7 @@
 
 package MongoDB::Connection;
 {
-  $MongoDB::Connection::VERSION = '0.503.3';
+  $MongoDB::Connection::VERSION = '0.700.0';
 }
 
 # ABSTRACT: A connection to a Mongo server
@@ -77,7 +77,7 @@ MongoDB::Connection - A connection to a Mongo server
 
 =head1 VERSION
 
-version 0.503.3
+version 0.700.0
 
 =head1 SYNOPSIS
 
@@ -371,7 +371,7 @@ C<MongoDB::Cursor>.  At the moment, the only required field for C<$info> is
 "ns", although "request_id" is likely to be required in the future.  The
 C<$info> hash will be automatically created for you by L<MongoDB::write_query>.
 
-=head fsync(\%args)
+=head2 fsync(\%args)
 
     $conn->fsync();
 
@@ -385,7 +385,7 @@ The primary use of fsync is to lock the database during backup operations. This 
 
     $conn->fsync({lock => 1});
 
-=head fsync_unlock()
+=head2 fsync_unlock()
 
     $conn->fsync_unlock();
 

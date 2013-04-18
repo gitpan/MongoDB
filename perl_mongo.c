@@ -167,7 +167,7 @@ perl_mongo_call_function (const char *func, int num, ...) {
   return ret;
 }
 
-static int perl_mongo_regex_flags( char **flags_ptr, SV *re ) {
+static int perl_mongo_regex_flags( char *flags_ptr, SV *re ) {
   dSP;
   ENTER;
   SAVETMPS;
@@ -188,7 +188,7 @@ static int perl_mongo_regex_flags( char **flags_ptr, SV *re ) {
 
   char *flags = SvPVutf8_nolen(flags_sv);
 
-  *flags_ptr = strdup(flags);
+  strncpy( flags_ptr, flags, 7 );
 }
 
 void
@@ -280,7 +280,7 @@ perl_mongo_construct_instance_with_magic (const char *klass, void *ptr, MGVTBL *
   return ret;
 }
 
-static SV *bson_to_av (buffer *buf, char *dt_type);
+static SV *bson_to_av (buffer *buf, char *dt_type, int inflate_dbrefs, SV *client );
 
 void perl_mongo_make_oid(char *twelve, char *twenty4) {
   int i;
@@ -314,7 +314,7 @@ oid_to_sv (buffer *buf)
 }
 
 static SV *
-elem_to_sv (int type, buffer *buf, char *dt_type)
+elem_to_sv (int type, buffer *buf, char *dt_type, int inflate_dbrefs, SV *client )
 {
   SV *value = 0;
 
@@ -353,11 +353,12 @@ elem_to_sv (int type, buffer *buf, char *dt_type)
     break;
   }
   case BSON_OBJECT: {
-    value = perl_mongo_bson_to_sv(buf, dt_type);
+    value = perl_mongo_bson_to_sv(buf, dt_type, inflate_dbrefs, client );
+
     break;
   }
   case BSON_ARRAY: {
-    value = bson_to_av(buf, dt_type);
+    value = bson_to_av(buf, dt_type, inflate_dbrefs, client );
     break;
   }
   case BSON_BINARY: {
@@ -576,7 +577,7 @@ elem_to_sv (int type, buffer *buf, char *dt_type)
     buf->pos += code_len;
 
     if (type == BSON_CODE) {
-      scope = perl_mongo_bson_to_sv(buf, dt_type);
+      scope = perl_mongo_bson_to_sv(buf, dt_type, inflate_dbrefs, client );
       value = perl_mongo_construct_instance("MongoDB::Code", "code", code, "scope", scope, NULL);
     }
     else {
@@ -619,7 +620,7 @@ elem_to_sv (int type, buffer *buf, char *dt_type)
 }
 
 static SV *
-bson_to_av (buffer *buf, char *dt_type)
+bson_to_av (buffer *buf, char *dt_type, int inflate_dbrefs, SV *client )
 {
   AV *ret = newAV ();
 
@@ -635,7 +636,7 @@ bson_to_av (buffer *buf, char *dt_type)
     buf->pos += strlen(buf->pos) + 1;
 
     // get value
-    if ((sv = elem_to_sv (type, buf, dt_type))) {
+    if ((sv = elem_to_sv (type, buf, dt_type, inflate_dbrefs, client ))) {
       av_push (ret, sv);
     }
   }
@@ -644,12 +645,14 @@ bson_to_av (buffer *buf, char *dt_type)
 }
 
 SV *
-perl_mongo_bson_to_sv (buffer *buf, char *dt_type)
+perl_mongo_bson_to_sv (buffer *buf, char *dt_type, int inflate_dbrefs, SV *client )
 {
   HV *ret = newHV();
   SV *flag = get_sv("MongoDB::BSON::utf8_flag_on", 0);
 
   char type;
+  int is_dbref = 1;
+  int key_num  = 0;
 
   // for size
   buf->pos += INT_32;
@@ -659,11 +662,18 @@ perl_mongo_bson_to_sv (buffer *buf, char *dt_type)
     SV *value;
 
     name = buf->pos;
+    key_num++;
+    /* check if this is a DBref. We must see the keys
+       $ref, $id, and $db in that order, with no extra keys */
+    if ( key_num == 1 && strcmp( name, "$ref" ) ) is_dbref = 0;
+    if ( key_num == 2 && is_dbref == 1 && strcmp( name, "$id" ) ) is_dbref = 0;
+    if ( key_num == 3 && is_dbref == 1 && strcmp( name, "$db" ) ) is_dbref = 0;
+
     // get past field name
     buf->pos += strlen(buf->pos) + 1;
 
     // get value
-    value = elem_to_sv(type, buf, dt_type);
+    value = elem_to_sv(type, buf, dt_type, inflate_dbrefs, client );
     if (!flag || !SvIOK(flag) || SvIV(flag) != 0) {
     	if (!hv_store (ret, name, 0-strlen (name), value, 0)) {
      	 croak ("failed storing value in hash");
@@ -673,6 +683,23 @@ perl_mongo_bson_to_sv (buffer *buf, char *dt_type)
      	 croak ("failed storing value in hash");
     	}
     }
+  }
+
+  if ( key_num == 3 && is_dbref == 1 && inflate_dbrefs == 1 ) { 
+    SV *dbr_class = sv_2mortal(newSVpv("MongoDB::DBRef", 0));
+    SV *dbref = 
+      perl_mongo_call_method( dbr_class, "new", 0, 8,
+                              newSVpvn("ref",     strlen("ref")),  
+                              *hv_fetch( ret, "$ref", 4, FALSE ),
+                              newSVpvn("id",      strlen("id")),
+                              *hv_fetch( ret, "$id", 3, FALSE ),
+                              newSVpvn("db",      strlen("db")),
+                              *hv_fetch( ret, "$db", 3, FALSE ),
+                              newSVpvn("client",  strlen("client")),
+                              client
+                                 );
+
+    return dbref;
   }
 
   return newRV_noinc ((SV *)ret);
@@ -1364,6 +1391,15 @@ append_sv (buffer *buf, const char *key, SV *sv, stackette *stack, int is_insert
         perl_mongo_serialize_key( buf, key, is_insert );
         perl_mongo_serialize_long( buf, epoch_ms );
       }
+      /* DBRef */
+      else if (sv_isa(sv, "MongoDB::DBRef")) { 
+        SV *dbref;
+        set_type(buf, BSON_OBJECT);
+        perl_mongo_serialize_key(buf, key, is_insert);
+        dbref = perl_mongo_call_reader(sv, "_ordered");
+        ixhash_to_bson(buf, dbref, NO_PREP, stack, is_insert);
+      }
+
       /* boolean */
       else if (sv_isa(sv, "boolean")) {
         set_type(buf, BSON_BOOL);
@@ -1612,23 +1648,45 @@ static void serialize_regex(buffer *buf, const char *key, REGEXP *re, int is_ins
 }
 
 static void serialize_regex_flags(buffer *buf, SV *sv) {
-  char flags[] = {0,0,0,0,0,0};
+  char flags[]     = {0,0,0,0,0};
+  char flags_tmp[] = {0,0,0,0,0,0,0,0};
   unsigned int i = 0, f = 0;
 
-  char *flags_str;
-  perl_mongo_regex_flags( &flags_str, sv );
+#if PERL_REVISION == 5 && PERL_VERSION < 10
+  // pre-5.10 doesn't have the re API
+  STRLEN string_length;
+  char *re_string = SvPV( sv, string_length );
+  
+  /* pre-5.14 regexes are stringified in the format: (?ix-sm:foo) where
+     everything between ? and - are the current flags. The format changed
+     around 5.14, but for everything after 5.10 we use the re API anyway. */
+  for( i = 2; i < string_length && re_string[i] != '-'; i++ ) { 
+    if ( re_string[i] == 'i'  ||
+         re_string[i] == 'm'  ||
+         re_string[i] == 'x'  ||
+         re_string[i] == 's' ) { 
+      flags[f++] = re_string[i];
+    } else if ( re_string[i] == ':' ) {
+      break;
+    }
+  }
 
-  for ( i = 0; i < sizeof( flags_str ); i++ ) { 
-    if ( flags_str[i] == NULL ) break;
+
+#else
+  perl_mongo_regex_flags( &flags_tmp, sv );
+#endif
+
+  for ( i = 0; i < sizeof( flags_tmp ); i++ ) { 
+    if ( flags_tmp[i] == NULL ) break;
 
     // MongoDB supports only flags /imxs, so warn if we get anything else and discard them.
-    if ( flags_str[i] == 'i' ||
-         flags_str[i] == 'm' ||
-         flags_str[i] == 'x' ||
-         flags_str[i] == 's' ) { 
-      flags[f++] = flags_str[i];
+    if ( flags_tmp[i] == 'i' ||
+         flags_tmp[i] == 'm' ||
+         flags_tmp[i] == 'x' ||
+         flags_tmp[i] == 's' ) { 
+      flags[f++] = flags_tmp[i];
     } else { 
-      warn( "stripped unsupported regex flag /%c from MongoDB regex\n", flags_str[i] );
+      warn( "stripped unsupported regex flag /%c from MongoDB regex\n", flags_tmp[i] );
     }
   }
 

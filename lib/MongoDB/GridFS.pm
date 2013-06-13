@@ -16,7 +16,7 @@
 
 package MongoDB::GridFS;
 {
-  $MongoDB::GridFS::VERSION = '0.700.0';
+  $MongoDB::GridFS::VERSION = '0.701.4';
 }
 
 
@@ -219,7 +219,7 @@ sub _calc_md5 {
     my ($self, $id, $root, $retry) = @_;
    
     # Try to get an md5 hash for the file
-    my $result = $self->_database->run_command({"filemd5", $id, "root" => $self->prefix});
+    my $result = $self->_database->run_command(["filemd5", $id, "root" => $self->prefix]);
     
     # If we didn't get a hash back, it means something is wrong (probably to do with gridfs's 
     # indexes because its currently the only error that is thown from the md5 class)
@@ -275,7 +275,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version 0.700.0
+version 0.701.4
 
 =head1 SYNOPSIS
 

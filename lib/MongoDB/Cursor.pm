@@ -16,7 +16,7 @@
 
 package MongoDB::Cursor;
 {
-  $MongoDB::Cursor::VERSION = '0.700.0';
+  $MongoDB::Cursor::VERSION = '0.701.4';
 }
 
 
@@ -331,7 +331,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version 0.700.0
+version 0.701.4
 
 =head1 SYNOPSIS
 

@@ -1,6 +1,6 @@
 package MongoDB::DBRef;
 {
-  $MongoDB::DBRef::VERSION = '0.700.0';
+  $MongoDB::DBRef::VERSION = '0.701.4';
 }
 
 # ABSTRACT: Native DBRef support
@@ -109,7 +109,7 @@ MongoDB::DBRef - Native DBRef support
 
 =head1 VERSION
 
-version 0.700.0
+version 0.701.4
 
 =head1 SYNOPSIS
 

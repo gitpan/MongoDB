@@ -25,7 +25,7 @@ if ($@) {
     plan skip_all => $@;
 }
 else {
-    plan tests => 137;
+    plan tests => 139;
 }
 
 my $db = $conn->get_database('test_database');
@@ -119,7 +119,7 @@ is($coll->count, 2);
 
 $ok = $coll->ensure_index({boo => 1}, {unique => 1});
 ok(!defined $ok);
-$coll->insert({foo => 3, bar => 3, baz => 3, boo => 2});
+eval { $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2}) };
 
 is($coll->count, 2, 'unique index');
 
@@ -163,7 +163,7 @@ $coll->drop;
 
     # unique index
     $coll->ensure_index({boo => 1}, {unique => 1});
-    $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2});
+    eval { $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2}) };
     is($coll->count, 2, 'unique index');
 }
 $coll->drop;
@@ -193,17 +193,27 @@ ok(!defined $obj->{none}, 'null field is undefined');
 
 $coll->drop;
 
-# ord("\x9F") is 159
-$coll->insert({foo => "\x9F" });
+$coll->insert({foo => "\xE9" });
 my $utfblah = $coll->find_one;
-is(ord($utfblah->{'foo'}), 159, 'translate non-utf8 to utf8 char');
+is($utfblah->{'foo'}, "\xE9", 'non-upraded latin1 char');
+
+$utfblah = {foo => "\xE9" };
+utf8::upgrade($utfblah->{foo});
+$coll->insert($utfblah);
+$utfblah = $coll->find_one;
+is($utfblah->{'foo'}, "\xE9", , 'utf8-upgraded latin1 char');
 
 $MongoDB::BSON::utf8_flag_on = 0;
 $coll->drop;
-$coll->insert({"\x9F" => "hi"});
+$coll->insert({"\xE9" => "hi"});
 $utfblah = $coll->find_one;
-is($utfblah->{chr(159)}, "hi", 'translate non-utf8 key');
+is($utfblah->{"\xC3\xA9"}, "hi", 'byte key');
 $MongoDB::BSON::utf8_flag_on = 1;
+
+$coll->drop;
+$coll->insert({"\xE9" => "hi"});
+$utfblah = $coll->find_one;
+is($utfblah->{"\xE9"}, "hi", 'byte key');
 
 $coll->drop;
 my $keys = tie(my %idx, 'Tie::IxHash');
@@ -412,7 +422,7 @@ SKIP: {
 
     $coll->insert({x=>1});
     $ok = $coll->update({}, {'$inc' => {x => 1}});
-    is($ok, 1);
+    is($ok->{ok}, 1);
 
     $ok = $coll->update({}, {'$inc' => {x => 2}}, {safe => 1});
     is($ok->{ok}, 1);
@@ -484,14 +494,11 @@ SKIP: {
     $MongoDB::BSON::utf8_flag_on = 0;
     $coll->insert({ foo => "\x{4e2d}\x{56fd}"});
     $utfblah = $coll->find_one;
-    $coll->drop;
-    $coll->insert({foo2 => $utfblah->{foo}});
-    $utfblah = $coll->find_one;
     # use utf8;
     my $utfv2 = encode('utf8',"\x{4e2d}\x{56fd}");
     # my $utfv2 = encode('utf8',"中国");
     # diag(Dumper(\$utfv2));
-    is($utfblah->{foo2},$utfv2,'turn utf8 flag off,return perl internal form(bytes)');
+    is($utfblah->{foo},$utfv2,'turn utf8 flag off,return perl internal form(bytes)');
     # restore;
     $MongoDB::BSON::utf8_flag_on = 1;
     $coll->drop;
@@ -516,7 +523,7 @@ SKIP: {
     }
     is($coll->count, 20);
 
-    $coll->ensure_index({"y" => 1}, {"unique" => 1, "name" => "foo"});
+    eval { $coll->ensure_index({"y" => 1}, {"unique" => 1, "name" => "foo"}) };
     my $index = $coll->_database->get_collection("system.indexes")->find_one({"name" => "foo"});
     ok(!$index);
 

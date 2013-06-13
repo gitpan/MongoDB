@@ -16,7 +16,7 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.700.0';
+  $MongoDB::Database::VERSION = '0.701.4';
 }
 
 
@@ -55,9 +55,11 @@ sub AUTOLOAD {
 sub collection_names {
     my ($self) = @_;
     my $it = $self->get_collection('system.namespaces')->query({});
-    return map {
-        substr($_, length($self->name) + 1)
-    } map { $_->{name} } $it->all;
+    return grep { 
+        not ( index( $_, '$' ) >= 0 && index( $_, '.oplog.$' ) < 0 ) 
+    } map { 
+        substr $_->{name}, length( $self->name ) + 1 
+    } $it->all;
 }
 
 
@@ -140,7 +142,7 @@ MongoDB::Database - A Mongo Database
 
 =head1 VERSION
 
-version 0.700.0
+version 0.701.4
 
 =head1 SYNOPSIS
 

@@ -16,7 +16,7 @@
 
 package MongoDB::OID;
 {
-  $MongoDB::OID::VERSION = '0.700.0';
+  $MongoDB::OID::VERSION = '0.701.4';
 }
 
 # ABSTRACT: A Mongo Object ID
@@ -31,12 +31,17 @@ has value => (
     builder => 'build_value',
 );
 
-sub BUILDARGS { 
-    my $class = shift; 
-    return $class->SUPER::BUILDARGS(flibble => @_)
-        if @_ % 2; 
-    return $class->SUPER::BUILDARGS(@_); 
-}
+around BUILDARGS => sub {
+    my $orig = shift;
+    my $class = shift;
+    if (@_ == 1) {
+        return $class->$orig(value => $_[0])
+            unless ref($_[0]);
+        return $class->$orig(value => $_[0]->value)
+            if blessed($_[0]) && $_[0]->isa($class);
+    }
+    return $class->$orig(@_);
+};
 
 sub build_value {
     my $self = shift;
@@ -54,11 +59,7 @@ sub to_string {
 sub get_time {
     my ($self) = @_;
 
-    my $ts = 0;
-    for (my $i = 0; $i<4; $i++) {
-        $ts = ($ts * 256) + hex(substr($self->value, $i*2, 2));
-    }
-    return $ts;
+    return hex(substr($self->value, 0, 8));
 }
 
 
@@ -86,7 +87,7 @@ MongoDB::OID - A Mongo Object ID
 
 =head1 VERSION
 
-version 0.700.0
+version 0.701.4
 
 =head1 SYNOPSIS
 
@@ -106,8 +107,10 @@ constructor.  For example:
 
     my $id1 = MongoDB::OID->new;
     my $id2 = MongoDB::OID->new(value => $id1->value);
+    my $id3 = MongoDB::OID->new($id1->value);
+    my $id4 = MongoDB::OID->new($id1);
 
-Now C<$id1> and C<$id2> will have the same value.
+Now C<$id1>, C<$id2>, $<$id3> and C<$id4> will have the same value.
 
 OID generation is thread safe.
 

@@ -84,7 +84,7 @@ my $c = $db->get_collection('bar');
 }
 
 {
-    $MongoDB::BSON::char = "=";
+    local $MongoDB::BSON::char = "=";
     $c->drop;
     $c->update({x => 1}, {"=inc" => {x => 1}}, {upsert => true});
 
@@ -93,7 +93,7 @@ my $c = $db->get_collection('bar');
 }
 
 {
-    $MongoDB::BSON::char = ":";
+    local $MongoDB::BSON::char = ":";
     $c->drop;
     $c->batch_insert([{x => 1}, {x => 2}, {x => 3}, {x => 4}, {x => 5}]);
     my $cursor = $c->query({x => {":gt" => 2, ":lte" => 4}})->sort({x => 1});
@@ -109,18 +109,15 @@ my $c = $db->get_collection('bar');
 {
     $c->drop;
 
-    # should convert invalid utf8 to valid
-    my $invalid = "\xFE";
-    $c->insert({char => $invalid});
+    # latin1
+    $c->insert({char => "\xFE"});
     my $x =$c->find_one;
-    # now that the utf8 flag is set, it converts it back to a single char for
-    # unknown reasons
     is($x->{char}, "\xFE");
 
     $c->remove;
 
-    # should be the same with valid utf8
-    my $valid = "\xE6\xB5\x8B\xE8\xAF\x95";
+    # non-latin1
+    my $valid = "\x{8D4B}\x{8BD5}";
     $c->insert({char => $valid});
     $x = $c->find_one;
 
@@ -330,8 +327,7 @@ package main;
 {
     $c->drop;
 
-    my $old = $MongoDB::BSON::use_binary;
-    $MongoDB::BSON::use_binary = 0;
+    local $MongoDB::BSON::use_binary = 0;
 
     my $str = "foo";
     my $bin = {bindata => [
@@ -368,8 +364,6 @@ package main;
         is($arr[$i]->subtype, $bin->{'bindata'}->[$i]->subtype);
         is($arr[$i]->data, $bin->{'bindata'}->[$i]->data);
     }
-
-    $MongoDB::BSON::use_binary = $old;
 }
 
 # Checking hash key unicode support

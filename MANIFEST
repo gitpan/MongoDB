@@ -13,6 +13,7 @@ inc/Module/Install.pm
 inc/Module/Install/AutoInstall.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
+inc/Module/Install/Compiler.pm
 inc/Module/Install/Fetch.pm
 inc/Module/Install/Include.pm
 inc/Module/Install/Makefile.pm
@@ -28,7 +29,6 @@ lib/MongoDB/Collection.pm
 lib/MongoDB/Connection.pm
 lib/MongoDB/Cursor.pm
 lib/MongoDB/DBRef.pm
-lib/MongoDB/DBRef.pm~
 lib/MongoDB/DataTypes.pod
 lib/MongoDB/Database.pm
 lib/MongoDB/Examples.pod
@@ -52,15 +52,12 @@ t/cursor.t
 t/database.t
 t/db.t
 t/dbref.t
-t/dbref.t~
 t/delegation.t
-t/delegation.t~
 t/dt_types.t
 t/fsync.t
 t/gridfs.t
 t/img.png
 t/input.txt
-t/isUTF8.t
 t/memtest.pl
 t/old_conn_collection.t
 t/old_conn_connection.t
@@ -72,6 +69,7 @@ t/threads/basic.t
 t/threads/cursor.t
 t/threads/oid.t
 t/types.t
+t/w.t
 weaver.ini
 xs/BSON.xs
 xs/Cursor.xs

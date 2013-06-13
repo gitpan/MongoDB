@@ -1,5 +1,5 @@
 {
-   "abstract" : "A Mongo Driver for Perl",
+   "abstract" : "A MongoDB Driver for Perl",
    "author" : [
       "Florian Ragwitz <rafl@debian.org>",
       "Kristina Chodorow <kristina@mongodb.org>",
@@ -37,6 +37,7 @@
             "IO::File" : "0",
             "Moose" : "0",
             "Moose::Util::TypeConstraints" : "0",
+            "Scalar::Util" : "0",
             "Tie::IxHash" : "0",
             "XSLoader" : "0",
             "boolean" : "0",
@@ -61,7 +62,6 @@
             "File::Temp" : "0",
             "FileHandle" : "0",
             "JSON" : "0",
-            "Scalar::Util" : "0",
             "Test::Exception" : "0",
             "Test::More" : "0",
             "Test::Warn" : "0",
@@ -84,6 +84,6 @@
          "web" : "https://github.com/mongodb/mongo-perl-driver"
       }
    },
-   "version" : "0.700.0"
+   "version" : "0.701.4"
 }
 

@@ -1,5 +1,5 @@
 #
-#  Copyright 2009 10gen, Inc.
+#  Copyright 2009-2013 10gen, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,21 +16,22 @@
 
 package MongoDB::MongoClient;
 {
-  $MongoDB::MongoClient::VERSION = '0.701.4';
+  $MongoDB::MongoClient::VERSION = '0.702.0';
 }
 
-# ABSTRACT: A connection to a Mongo server
+# ABSTRACT: A connection to a MongoDB server
+
 use Moose;
 use Moose::Util::TypeConstraints;
 use MongoDB;
 use MongoDB::Cursor;
-
+use MongoDB::BSON::Binary;
 use Digest::MD5;
 use Tie::IxHash;
-use Carp 'carp';
+use Carp 'carp', 'croak';
 use Scalar::Util 'reftype';
 use boolean;
-
+use Encode;
 
 has host => (
     is       => 'ro',
@@ -142,6 +143,13 @@ has sasl => (
     default  => 0
 );
 
+has sasl_mechanism => ( 
+    is       => 'ro',
+    isa      => subtype( Str => where { /^GSSAPI|PLAIN$/ } ),
+    required => 1,
+    default  => 'GSSAPI',
+);
+
 # hash of servers in a set
 # call connected() to determine if a connection is enabled
 has _servers => (
@@ -193,7 +201,7 @@ sub BUILD {
                / ([^?]*) # /[database]
                 (?: [?] (.*) )? # [?options]
             )?
-            $ }x) {
+            $ }x ) {
         my ($username, $password, $hostpairs, $database, $options) = ($1, $2, $3, $4, $5);
 
         # we add these things to $opts as well as self so that they get propagated when we recurse for multiple servers
@@ -467,13 +475,13 @@ sub _sasl_check {
 }
 
 sub _sasl_start { 
-    my ( $self, $payload ) = @_;
+    my ( $self, $payload, $mechanism ) = @_;
 
-    # warn "SASL start, payload = [$payload]";
+    # warn "SASL start, payload = [$payload], mechanism = [$mechanism]\n";
 
     my $res = $self->get_database( '$external' )->run_command( [ 
         saslStart     => 1,
-        mechanism     => 'GSSAPI',
+        mechanism     => $mechanism,
         payload       => $payload,
         autoAuthorize => 1 ] );
 
@@ -497,6 +505,19 @@ sub _sasl_continue {
     return $res;
 }
 
+
+sub _sasl_plain_authenticate { 
+    my ( $self ) = @_;
+
+    my $username = defined $self->username ? $self->username : "";
+    my $password = defined $self->password ? $self->password : ""; 
+
+    my $auth_bytes = encode( "UTF-8", "\x00" . $username . "\x00" . $password );
+    my $payload = MongoDB::BSON::Binary->new( data => $auth_bytes ); 
+
+    $self->_sasl_start( $payload, "PLAIN" );    
+} 
+
 __PACKAGE__->meta->make_immutable( inline_destructor => 0 );
 
 1;
@@ -507,11 +528,11 @@ __END__
 
 =head1 NAME
 
-MongoDB::MongoClient - A connection to a Mongo server
+MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version 0.701.4
+version 0.702.0
 
 =head1 SYNOPSIS
 
@@ -528,19 +549,6 @@ It can connect to a database server running anywhere, though:
     my $client = MongoDB::MongoClient->new(host => 'example.com:12345');
 
 See the L</"host"> section for more options for connecting to MongoDB.
-
-=head2 Multithreading
-
-Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
-will have to create their own connections to the database.
-
-=head1 NAME
-
-MongoDB::MongoClient - A client object for a MongoDB server
-
-=head1 SEE ALSO
-
-Core documentation on connections: L<http://dochub.mongodb.org/core/connections>.
 
 =head1 ATTRIBUTES
 
@@ -720,18 +728,61 @@ This tells the driver that you are connecting to an SSL mongodb instance.
 This option will be ignored if the driver was not compiled with the SSL flag. You must
 also be using a database server that supports SSL.
 
-=head2 sasl (EXPERIMENTAL)
+The driver must be built as follows for SSL support:
+
+    perl Makefile.PL --ssl
+    make
+    make install
+
+Alternatively, you can set the C<PERL_MONGODB_WITH_SSL> environment variable before
+installing:
+
+    PERL_MONGODB_WITH_SSL=1 cpan MongoDB
+
+The C<libcrypto> and C<libssl> libraries are required for SSL support.
+
+=head2 sasl
+
+This attribute is experimental.
 
 If set to C<1>, the driver will attempt to negotiate SASL authentication upon
-connection. Currently, the only supported mechanism is GSSAPI/Krb5 on Linux. The
+connection. See L</sasl_mechanism> for a list of the currently supported mechanisms. The
 driver must be built as follows for SASL support:
 
     perl Makefile.PL --sasl
     make
     make install
 
+Alternatively, you can set the C<PERL_MONGODB_WITH_SASL> environment variable before
+installing:
+
+    PERL_MONGODB_WITH_SASL=1 cpan MongoDB
+
 The C<libgsasl> library is required for SASL support. RedHat/CentOS users can find it
 in the EPEL repositories.
+
+Future versions of this driver may switch to L<Cyrus SASL|http://www.cyrusimap.org/docs/cyrus-sasl/2.1.25/>
+in order to be consistent with the MongoDB server, which now uses Cyrus.
+
+=head2 sasl_mechanism
+
+This attribute is experimental.
+
+This specifies the SASL mechanism to use for authentication with a MongoDB server. (See L</sasl>.) 
+The default is GSSAPI. The supported SASL mechanisms are:
+
+=over 4
+
+=item * C<GSSAPI>. This is the default. GSSAPI will attempt to authenticate against Kerberos
+for MongoDB Enterprise 2.4+. You must run your program from within a C<kinit> session and set 
+the C<username> attribute to the Kerberos principal name, e.g. C<user@EXAMPLE.COM>. 
+
+=item * C<PLAIN>. The SASL PLAIN mechanism will attempt to authenticate against LDAP for
+MongoDB Enterprise 2.6+. Because the password is not encrypted, you should only use this
+mechanism over a secure connection. You must set the C<username> and C<password> attributes 
+to your LDAP credentials.
+
+=back
 
 =head2 dt_type
 
@@ -752,19 +803,19 @@ Set this to C<0> if you don't want to auto-inflate them.
     $client->connect;
 
 Connects to the MongoDB server. Called automatically on object construction if
-C<auto_connect> is true.
+L</auto_connect> is true.
 
 =head2 database_names
 
     my @dbs = $client->database_names;
 
-Lists all databases on the mongo server.
+Lists all databases on the MongoDB server.
 
 =head2 get_database($name)
 
     my $database = $client->get_database('foo');
 
-Returns a L<MongoDB::Database> instance for database with the given C<$name>.
+Returns a L<MongoDB::Database> instance for the database with the given C<$name>.
 
 =head2 get_master
 
@@ -785,7 +836,7 @@ automatically hashed before sending over the wire, unless C<$is_digest> is
 true, which will assume you already did the hashing on yourself.
 
 See also the core documentation on authentication:
-L<http://dochub.mongodb.org/core/authentication>.
+L<http://docs.mongodb.org/manual/core/access-control/>.
 
 =head2 send($str)
 
@@ -824,6 +875,15 @@ The primary use of fsync is to lock the database during backup operations. This 
     $conn->fsync_unlock();
 
 Unlocks a database server to allow writes and reverses the operation of a $conn->fsync({lock => 1}); operation. 
+
+=head1 MULTITHREADING
+
+Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
+will have to create their own connections to the database.
+
+=head1 SEE ALSO
+
+Core documentation on connections: L<http://docs.mongodb.org/manual/reference/connection-string/>.
 
 =head1 AUTHORS
 

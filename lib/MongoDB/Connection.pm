@@ -1,5 +1,5 @@
 #
-#  Copyright 2009 10gen, Inc.
+#  Copyright 2009-2013 10gen, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 
 package MongoDB::Connection;
 {
-  $MongoDB::Connection::VERSION = '0.701.4';
+  $MongoDB::Connection::VERSION = '0.702.0';
 }
 
-# ABSTRACT: A connection to a Mongo server
+# ABSTRACT: A connection to a MongoDB server (DEPRECATED)
+
 use Moose;
 
 use MongoDB;
@@ -73,11 +74,16 @@ __END__
 
 =head1 NAME
 
-MongoDB::Connection - A connection to a Mongo server
+MongoDB::Connection - A connection to a MongoDB server (DEPRECATED)
 
 =head1 VERSION
 
-version 0.701.4
+version 0.702.0
+
+=head1 DEPRECATED
+
+NOTE: C<MongoDB::Connection> is DEPRECATED as of version 0.502.0 of the MongoDB CPAN distribution. 
+It is no longer maintained and will be removed in a future version. Use L<MongoDB::MongoClient> instead. 
 
 =head1 SYNOPSIS
 
@@ -95,19 +101,10 @@ It can connect to a database server running anywhere, though:
 
 See the L</"host"> section for more options for connecting to MongoDB.
 
-=head2 Multithreading
+=head2 MULTITHREADING
 
 Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
 will have to create their own connections to the database.
-
-=head1 NAME
-
-MongoDB::Connection - A connection to a MongoDB server
-
-=head1 DEPRECATED
-
-NOTE: C<MongoDB::Connection> is DEPRECATED as of version 0.502.0 of the MongoDB CPAN distribution. 
-It is no longer maintained and will be removed in a future version. Use L<MongoDB::MongoClient> instead. 
 
 =head1 SEE ALSO
 

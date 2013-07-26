@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009 10gen, Inc.
+ *  Copyright 2009-2013 10gen, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,12 +28,12 @@ static int mongo_link_timeout(int socket, time_t timeout);
 
 static void set_timeout(int socket, time_t timeout) {
 #ifdef WIN32
-  DWORD tv = (DWORD)timeout * 1000;
+  DWORD tv = (DWORD)timeout;
   const char *tv_ptr = (const char*)&tv;
 #else
   struct timeval tv;
-  tv.tv_sec = timeout;
-  tv.tv_usec = 0;
+  tv.tv_sec = timeout / 1000;
+  tv.tv_usec = (timeout % 1000) * 1000;
   const void *tv_ptr = (void*)&tv;
 #endif
   setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, tv_ptr, sizeof(tv));
@@ -44,17 +44,27 @@ static void set_timeout(int socket, time_t timeout) {
 static void sasl_authenticate( SV *client, mongo_link *link ) { 
   Gsasl *ctx = NULL;
   Gsasl_session *session;
-  SV *username, *conv_id;
+  SV *username, *mechanism, *conv_id;
   HV *result;       /* response document from mongod */
   char *p, *buf;    /* I/O buffers for gsasl */
   int rc;
   char out_buf[8192];
 
+  mechanism = perl_mongo_call_method( client, "sasl_mechanism", 0, 0 );
+  if ( !SvOK( mechanism ) ) { 
+    croak( "MongoDB: Could not retrieve SASL mechanism from client object\n" );
+  }
+
+  if ( strncmp( "PLAIN", SvPV_nolen( mechanism ), 5 ) == 0 ) { 
+    /* SASL PLAIN does not require a libgsasl conversation loop, so we can handle it elsewhere */
+    return perl_mongo_call_method( client, "_sasl_plain_authenticate", 0, 0 );
+  }
+
   if ( ( rc = gsasl_init( &ctx ) ) != GSASL_OK ) { 
     croak( "MongoDB: Cannot initialize libgsasl (%d): %s\n", rc, gsasl_strerror(rc) );  
   }
 
-  if ( ( rc = gsasl_client_start( ctx, "GSSAPI", &session ) ) != GSASL_OK ) { 
+  if ( ( rc = gsasl_client_start( ctx, SvPV_nolen( mechanism ), &session ) ) != GSASL_OK ) { 
     croak( "MongoDB: Cannot initialize SASL client (%d): %s\n", rc, gsasl_strerror(rc) );
   }
 
@@ -77,7 +87,7 @@ static void sasl_authenticate( SV *client, mongo_link *link ) {
   }
   gsasl_free( p );
 
-  result = (HV *)SvRV( perl_mongo_call_method( client, "_sasl_start", 0, 1, newSVpv( out_buf, 0 ) ) );
+  result = (HV *)SvRV( perl_mongo_call_method( client, "_sasl_start", 0, 2, newSVpv( out_buf, 0 ), mechanism ) );
 
 #if 0  
   fprintf( stderr, "result conv id = [%s]\n", SvPV_nolen( *hv_fetch( result, "conversationId", 14, FALSE ) ) );

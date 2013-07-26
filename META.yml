@@ -11,7 +11,7 @@ build_requires:
   Data::Types: 0
   DateTime::Tiny: 0
   Devel::Peek: 0
-  Encode: 0
+  Exporter: 0
   File::Copy: 0
   File::Slurp: 0
   File::Temp: 0
@@ -43,6 +43,7 @@ requires:
   Class::MOP::Class: 0
   DateTime: 0
   Digest::MD5: 0
+  Encode: 0
   IO::File: 0
   Moose: 0
   Moose::Util::TypeConstraints: 0
@@ -59,4 +60,4 @@ resources:
   bugtracker: https://jira.mongodb.org/browse/PERL
   homepage: https://github.com/mongodb/mongo-perl-driver
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.701.4
+version: 0.702.0

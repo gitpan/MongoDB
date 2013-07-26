@@ -1,5 +1,5 @@
 #
-#  Copyright 2009 10gen, Inc.
+#  Copyright 2009-2013 10gen, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package MongoDB::Database;
 {
-  $MongoDB::Database::VERSION = '0.701.4';
+  $MongoDB::Database::VERSION = '0.702.0';
 }
 
 
-# ABSTRACT: A Mongo Database
+# ABSTRACT: A MongoDB Database
 
 use Moose;
 use MongoDB::GridFS;
@@ -138,11 +138,11 @@ __END__
 
 =head1 NAME
 
-MongoDB::Database - A Mongo Database
+MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version 0.701.4
+version 0.702.0
 
 =head1 SYNOPSIS
 

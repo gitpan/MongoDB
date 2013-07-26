@@ -1,3 +1,20 @@
+#
+#  Copyright 2009-2013 10gen, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+
 use strict;
 use warnings;
 use Test::More;
@@ -13,23 +30,12 @@ use MongoDB::GridFS::File;
 use DateTime;
 use FileHandle;
 
-my $m;
-eval {
-    my $host = "localhost";
-    if (exists $ENV{MONGOD}) {
-        $host = $ENV{MONGOD};
-    }
-    $m = MongoDB::MongoClient->new(host => $host, ssl => $ENV{MONGO_SSL});
-};
+use lib "t/lib";
+use MongoDBTest '$conn';
 
-if ($@) {
-    plan skip_all => $@;
-}
-else {
-    plan tests => 62;
-}
+plan tests => 62;
 
-my $db = $m->get_database('foo');
+my $db = $conn->get_database('foo');
 my $grid = $db->get_gridfs;
 $grid->drop;
 
@@ -247,6 +253,7 @@ unlink 't/output.txt', 't/output.png', 't/outsub.txt';
     $file = $coll->find_one({files_id => 1});
     is($file, undef);
 }
+
 
 
 END {

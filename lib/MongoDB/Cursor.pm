@@ -1,5 +1,5 @@
 #
-#  Copyright 2009 10gen, Inc.
+#  Copyright 2009-2013 10gen, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package MongoDB::Cursor;
 {
-  $MongoDB::Cursor::VERSION = '0.701.4';
+  $MongoDB::Cursor::VERSION = '0.702.0';
 }
 
 
@@ -331,7 +331,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version 0.701.4
+version 0.702.0
 
 =head1 SYNOPSIS
 

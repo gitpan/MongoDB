@@ -1,5 +1,5 @@
 #
-#  Copyright 2009 10gen, Inc.
+#  Copyright 2009-2013 10gen, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package MongoDB::Collection;
 {
-  $MongoDB::Collection::VERSION = '0.701.4';
+  $MongoDB::Collection::VERSION = '0.702.0';
 }
 
 
-# ABSTRACT: A Mongo Collection
+# ABSTRACT: A MongoDB Collection
 
 
 use Tie::IxHash;
@@ -40,7 +40,6 @@ has name => (
     isa      => 'Str',
     required => 1,
 );
-
 
 has full_name => (
     is      => 'ro',
@@ -77,18 +76,15 @@ sub get_collection {
     return $self->_database->get_collection($self->name.'.'.$coll);
 }
 
-
 sub to_index_string {
     my $keys = shift;
 
     my @name;
-    if (ref $keys eq 'ARRAY' ||
-        ref $keys eq 'HASH' ) {
-
-        while ((my $idx, my $d) = each(%$keys)) {
-            push @name, $idx;
-            push @name, $d;
-        }
+    if (ref $keys eq 'ARRAY') {
+        @name = @$keys;
+    }
+    elsif (ref $keys eq 'HASH' ) {
+        @name = %$keys
     }
     elsif (ref $keys eq 'Tie::IxHash') {
         my @ks = $keys->Keys;
@@ -149,7 +145,6 @@ sub find_one {
 }
 
 
-
 sub insert {
     my ($self, $object, $options) = @_;
     my ($id) = $self->batch_insert([$object], $options);
@@ -191,8 +186,6 @@ sub batch_insert {
 }
 
 
-
-
 sub update {
     my ($self, $query, $object, $opts) = @_;
 
@@ -232,8 +225,6 @@ sub update {
 }
 
 
-
-
 sub find_and_modify { 
     my ( $self, $opts ) = @_;
 
@@ -250,7 +241,6 @@ sub find_and_modify {
 }
 
 
-
 sub aggregate { 
     my ( $self, $pipeline ) = @_;
 
@@ -262,8 +252,6 @@ sub aggregate {
 
     return $result->{result};
 }
-
-
 
 
 sub rename {
@@ -284,7 +272,6 @@ sub rename {
       die $obj;
     }
 }
-
 
 
 sub remove {
@@ -335,6 +322,7 @@ sub ensure_index {
         Carp::croak("you're using the old ensure_index format, please upgrade");
     }
 
+    $keys = Tie::IxHash->new(@$keys) if ref $keys eq 'ARRAY';
     my $obj = Tie::IxHash->new("ns" => $ns, "key" => $keys);
 
     if (exists $options->{name}) {
@@ -390,7 +378,6 @@ sub _make_safe {
 
     return $ok;
 }
-
 
 sub save {
     my ($self, $doc, $options) = @_;
@@ -469,7 +456,6 @@ sub get_indexes {
     })->all;
 }
 
-
 sub drop {
     my ($self) = @_;
     $self->_database->run_command({ drop => $self->name });
@@ -488,34 +474,27 @@ __END__
 
 =head1 NAME
 
-MongoDB::Collection - A Mongo Collection
+MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version 0.701.4
+version 0.702.0
 
 =head1 SYNOPSIS
 
 An instance of a MongoDB collection.
 
     # gets the foo collection
-    my $collection = $db->foo;
+    my $collection = $db->get_collection( 'foo' );
 
 Collection names can be chained together to access subcollections.  For
-instance, the collection C<foo.bar> can be accessed with:
+instance, the collection C<foo.bar> can be accessed with either:
 
-    my $collection = $db->foo->bar;
+    my $collection = $db->get_collection( 'foo' )->get_collection( 'bar' );
 
-You can also access collections with the L<MongoDB::Database/get_collection>
-method.
+or
 
-=head1 NAME
-
-MongoDB::Collection - A Mongo collection
-
-=head1 SEE ALSO
-
-Core documentation on collections: L<http://dochub.mongodb.org/core/collections>.
+    my $collection = $db->get_collection( 'foo.bar' );
 
 =head1 ATTRIBUTES
 
@@ -528,23 +507,14 @@ The name of the collection.
 The full_name of the collection, including the namespace of the database it's
 in.
 
+=head1 METHODS
+
 =head2 get_collection ($name)
 
     my $collection = $database->get_collection('foo');
 
 Returns a L<MongoDB::Collection> for the collection called C<$name> within this
 collection.
-
-=head1 STATIC METHODS
-
-=head2 to_index_string ($keys)
-
-    $name = MongoDB::Collection::to_index_string({age : 1});
-
-Takes a L<Tie::IxHash>, hash reference, or array reference.  Converts it into
-an index string.
-
-=head1 METHODS
 
 =head2 find($query)
 
@@ -560,7 +530,7 @@ Other commonly used cursor methods are C<MongoDB::Cursor::limit>,
 C<MongoDB::Cursor::skip>, and C<MongoDB::Cursor::sort>.
 
 See also core documentation on querying:
-L<http://dochub.mongodb.org/core/find>.
+L<http://docs.mongodb.org/manual/core/read/>.
 
 =head2 query($query, $attrs?)
 
@@ -588,7 +558,7 @@ Order results.
 
 =back
 
-=head2 find_one ($query, $fields?)
+=head2 find_one($query, $fields?)
 
     my $object = $collection->find_one({ name => 'Resi' });
     my $object = $collection->find_one({ name => 'Resi' }, { name => 1, age => 1});
@@ -614,7 +584,7 @@ insert.  A safe insert will check with the database if the insert succeeded and
 croak if it did not.  You can also check if the insert succeeded by doing an
 unsafe insert, then calling L<MongoDB::Database/"last_error($options?)">.
 
-See also core documentation on insert: L<http://dochub.mongodb.org/core/insert>.
+See also core documentation on insert: L<http://docs.mongodb.org/manual/core/create/>.
 
 =head2 batch_insert (\@array, $options)
 
@@ -658,7 +628,7 @@ If the update fails and safe is set, the update will croak.
 
 =back
 
-See also core documentation on update: L<http://dochub.mongodb.org/core/update>.
+See also core documentation on update: L<http://docs.mongodb.org/manual/core/update/>.
 
 =head2 find_and_modify
 
@@ -688,6 +658,25 @@ Renames the collection.  It expects that the new name is currently not in use.
 Returns the new collection.  If a collection already exists with that new collection name this will
 die.
 
+=head2 save($doc, $options)
+
+    $collection->save({"author" => "joe"});
+    my $post = $collection->find_one;
+
+    $post->{author} = {"name" => "joe", "id" => 123, "phone" => "555-5555"};
+
+    $collection->save( $post );
+    $collection->save( $post, { safe => 1 } )
+
+Inserts a document into the database if it does not have an _id field, upserts
+it if it does have an _id field.
+
+The return types for this function are a bit of a mess, as it will return the
+_id if a new document was inserted, 1 if an upsert occurred, and croak if the
+safe option was set and an error occurred.  You can also check if the save
+succeeded by doing an unsafe save, then calling
+L<MongoDB::Database/"last_error($options?)">.
+
 =head2 remove ($query?, $options?)
 
     $collection->remove({ answer => { '$ne' => 42 } });
@@ -716,7 +705,7 @@ If the update fails and safe is set, this function will croak.
 
 =back
 
-See also core documentation on remove: L<http://dochub.mongodb.org/core/remove>.
+See also core documentation on remove: L<http://docs.mongodb.org/manual/core/delete/>.
 
 =head2 ensure_index ($keys, $options?)
 
@@ -735,32 +724,6 @@ check if the indexing succeeded by doing an unsafe index creation, then calling
 L<MongoDB::Database/"last_error($options?)">.
 
 See the L<MongoDB::Indexing> pod for more information on indexing.
-
-=head2 save($doc, $options)
-
-    $collection->save({"author" => "joe"});
-    my $post = $collection->find_one;
-
-    $post->{author} = {"name" => "joe", "id" => 123, "phone" => "555-5555"};
-
-    $collection->save($post);
-
-Inserts a document into the database if it does not have an _id field, upserts
-it if it does have an _id field.
-
-=over
-
-=item C<safe => boolean>
-
-If the save fails and safe is set, this function will croak.
-
-=back
-
-The return types for this function are a bit of a mess, as it will return the
-_id if a new document was inserted, 1 if an upsert occurred, and croak if the
-safe option was set and an error occurred.  You can also check if the save
-succeeded by doing an unsafe save, then calling
-L<MongoDB::Database/"last_error($options?)">.
 
 =head2 count($query?)
 
@@ -825,10 +788,6 @@ index is ascending or descending on that key.
     $collection->drop;
 
 Deletes a collection as well as all of its indexes.
-
-=head1 AUTHOR
-
-  Kristina Chodorow <kristina@mongodb.org>
 
 =head1 AUTHORS
 

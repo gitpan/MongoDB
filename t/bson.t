@@ -1,3 +1,21 @@
+#
+#  Copyright 2009-2013 10gen, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+
+
 use strict;
 use warnings;
 use Test::More;
@@ -12,21 +30,11 @@ use Tie::IxHash;
 use MongoDB::Timestamp; # needed if db is being run as master
 use MongoDB::BSON::Binary;
 
-my $conn;
-eval {
-    my $host = "localhost";
-    if (exists $ENV{MONGOD}) {
-        $host = $ENV{MONGOD};
-    }
-    $conn = MongoDB::MongoClient->new(host => $host, ssl => $ENV{MONGO_SSL});
-};
+use lib "t/lib";
+use MongoDBTest '$conn';
 
-if ($@) {
-    plan skip_all => $@;
-}
-else {
-    plan tests => 75;
-}
+plan tests => 75;
+
 
 my $db = $conn->get_database('foo');
 my $c = $db->get_collection('bar');

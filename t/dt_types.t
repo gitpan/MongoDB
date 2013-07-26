@@ -1,3 +1,20 @@
+#
+#  Copyright 2009-2013 10gen, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+
 use strict;
 use warnings;
 use Test::More;
@@ -9,21 +26,11 @@ use MongoDB;
 use DateTime;
 use DateTime::Tiny;
 
-my $conn;
-eval {
-    my $host = "localhost";
-    if (exists $ENV{MONGOD}) {
-        $host = $ENV{MONGOD};
-    }
-    $conn = MongoDB::MongoClient->new(host => $host, ssl => $ENV{MONGO_SSL});
-};
+use lib "t/lib";
+use MongoDBTest '$conn';
 
-if ($@) {
-    plan skip_all => $@;
-}
-else {
-    plan tests => 15;
-}
+plan tests => 22;
+
 
 my $db = $conn->get_database('test_database');
 $db->drop;
@@ -107,3 +114,21 @@ my $now = DateTime->now;
     $db->drop;
 }
 
+{
+    # test fractional second roundtrip
+    $conn->dt_type( 'DateTime' );
+    my $coll = $db->get_collection( 'test_collection' );
+    my $now = DateTime->now;
+    $now->add( nanoseconds => 500_000_000 );
+    
+    $coll->insert( { date => $now } );
+    my $doc = $coll->find_one;
+
+    is $doc->{date}->year,       $now->year;
+    is $doc->{date}->month,      $now->month;
+    is $doc->{date}->day,        $now->day;
+    is $doc->{date}->hour,       $now->hour;
+    is $doc->{date}->minute,     $now->minute;
+    is $doc->{date}->second,     $now->second;
+    is $doc->{date}->nanosecond, $now->nanosecond;
+}

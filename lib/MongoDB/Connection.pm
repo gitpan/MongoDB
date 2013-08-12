@@ -16,7 +16,7 @@
 
 package MongoDB::Connection;
 {
-  $MongoDB::Connection::VERSION = '0.702.0';
+  $MongoDB::Connection::VERSION = '0.702.1';
 }
 
 # ABSTRACT: A connection to a MongoDB server (DEPRECATED)
@@ -78,7 +78,7 @@ MongoDB::Connection - A connection to a MongoDB server (DEPRECATED)
 
 =head1 VERSION
 
-version 0.702.0
+version 0.702.1
 
 =head1 DEPRECATED
 

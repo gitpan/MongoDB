@@ -20,7 +20,7 @@ use warnings;
 
 package MongoDB;
 {
-  $MongoDB::VERSION = '0.702.0';
+  $MongoDB::VERSION = '0.702.1';
 }
 # ABSTRACT: A MongoDB Driver for Perl
 
@@ -46,7 +46,7 @@ MongoDB - A MongoDB Driver for Perl
 
 =head1 VERSION
 
-version 0.702.0
+version 0.702.1
 
 =head1 SYNOPSIS
 

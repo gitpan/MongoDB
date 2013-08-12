@@ -28,7 +28,7 @@ MongoDB::Examples - Some examples of MongoDB syntax
 
 =head1 VERSION
 
-version 0.702.0
+version 0.702.1
 
 =head1 MAPPING SQL TO MONGODB
 

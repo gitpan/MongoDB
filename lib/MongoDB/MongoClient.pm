@@ -16,7 +16,7 @@
 
 package MongoDB::MongoClient;
 {
-  $MongoDB::MongoClient::VERSION = '0.702.0';
+  $MongoDB::MongoClient::VERSION = '0.702.1';
 }
 
 # ABSTRACT: A connection to a MongoDB server
@@ -532,7 +532,7 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version 0.702.0
+version 0.702.1
 
 =head1 SYNOPSIS
 

@@ -1,5 +1,5 @@
 #
-#  Copyright 2009-2013 10gen, Inc.
+#  Copyright 2009-2013 MongoDB, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package MongoDB::BSON;
 {
-  $MongoDB::BSON::VERSION = '0.702.1';
+  $MongoDB::BSON::VERSION = '0.702.2';
 }
 
 
@@ -50,7 +50,7 @@ MongoDB::BSON - Tools for serializing and deserializing data in BSON form
 
 =head1 VERSION
 
-version 0.702.1
+version 0.702.2
 
 =head1 NAME
 
@@ -129,13 +129,13 @@ Kristina Chodorow <kristina@mongodb.org>
 
 =item *
 
-Mike Friedman <mike.friedman@10gen.com>
+Mike Friedman <friedo@mongodb.com>
 
 =back
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by 10gen, Inc..
+This software is Copyright (c) 2013 by MongoDB, Inc..
 
 This is free software, licensed under:
 

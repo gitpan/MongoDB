@@ -1,5 +1,5 @@
 #
-#  Copyright 2009-2013 10gen, Inc.
+#  Copyright 2009-2013 MongoDB, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ throws_ok {
 } qr/couldn't connect to server/, 'exception on connection failure';
 
 SKIP: {
-    skip "connecting to default host/port won't work with a remote db", 14 if exists $ENV{MONGOD};
+    skip "connecting to default host/port won't work with a remote db", 13 if exists $ENV{MONGOD};
 
     lives_ok {
         $conn = MongoDB::MongoClient->new(ssl => $ENV{MONGO_SSL});

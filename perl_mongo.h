@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009 10gen, Inc.
+ *  Copyright 2009 MongoDB, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ typedef __int64 int64_t;
 #include <stdint.h>
 #endif // _MSC_VER
 #endif // WIN32
+#include <limits.h>
 
 // define regex macros for Perl 5.8
 #ifndef RX_PRECOMP
@@ -112,7 +113,11 @@ typedef __int64 int64_t;
 #define BSON_INT 16
 #define BSON_TIMESTAMP 17
 #define BSON_LONG 18
+#if CHAR_MIN == 0  // char is unsigned
+#define BSON_MINKEY 255
+#else
 #define BSON_MINKEY -1
+#endif
 #define BSON_MAXKEY 127
 
 #define GROW_SLOWLY 1048576

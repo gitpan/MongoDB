@@ -1,5 +1,5 @@
 #
-#  Copyright 2009-2013 10gen, Inc.
+#  Copyright 2009-2013 MongoDB, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ use DateTime::Tiny;
 
 use lib "t/lib";
 use MongoDBTest '$conn';
+
+plan skip_all => "connecting to default host/port won't work with a remote db" if exists $ENV{MONGOD};
 
 plan tests => 1;
 

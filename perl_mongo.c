@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009-2013 10gen, Inc.
+ *  Copyright 2009-2013 MongoDB, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -332,10 +332,9 @@ elem_to_sv (int type, buffer *buf, char *dt_type, int inflate_dbrefs, SV *client
     break;
   }
   case BSON_DOUBLE: {
-    int64_t i = MONGO_64p(buf->pos);
     double d;
 
-    memcpy(&d, &i, DOUBLE_64);
+    memcpy(&d, buf->pos, DOUBLE_64);
 
     value = newSVnv(d);
     buf->pos += DOUBLE_64;

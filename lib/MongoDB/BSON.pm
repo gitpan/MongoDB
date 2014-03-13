@@ -15,10 +15,7 @@
 #
 
 package MongoDB::BSON;
-{
-  $MongoDB::BSON::VERSION = '0.702.2';
-}
-
+$MongoDB::BSON::VERSION = '0.703_2';
 
 # ABSTRACT: Tools for serializing and deserializing data in BSON form
 use Moose;
@@ -50,7 +47,7 @@ MongoDB::BSON - Tools for serializing and deserializing data in BSON form
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 NAME
 
@@ -135,7 +132,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

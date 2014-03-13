@@ -15,10 +15,7 @@
 #
 
 package MongoDB::Database;
-{
-  $MongoDB::Database::VERSION = '0.702.2';
-}
-
+$MongoDB::Database::VERSION = '0.703_2';
 
 # ABSTRACT: A MongoDB Database
 
@@ -37,19 +34,6 @@ has name => (
     isa      => 'Str',
     required => 1,
 );
-
-
-sub AUTOLOAD {
-    my $self = shift @_;
-    our $AUTOLOAD;
-
-    my $coll = $AUTOLOAD;
-    $coll =~ s/.*:://;
-
-    carp sprintf q{AUTOLOADed collection method names are deprecated and will be removed in a future release. Use $db->get_collection( '%s' ) instead.}, $coll;
-
-    return $self->get_collection($coll);
-}
 
 
 sub collection_names {
@@ -113,11 +97,14 @@ sub run_command {
 
 
 sub eval {
-    my ($self, $code, $args) = @_;
+    my ($self, $code, $args, $nolock) = @_;
+
+    $nolock = boolean::false unless defined $nolock;
 
     my $cmd = tie(my %hash, 'Tie::IxHash');
     %hash = ('$eval' => $code,
-             'args' => $args);
+             'args' => $args,
+             'nolock' => $nolock);
 
     my $result = $self->run_command($cmd);
     if (ref $result eq 'HASH' && exists $result->{'retval'}) {
@@ -142,7 +129,7 @@ MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 SYNOPSIS
 
@@ -226,11 +213,19 @@ C<w> copies cannot be made.
 
 =item fsync
 
-If true, the database will fsync to disk before returning.
+If true, behaves identically to C<j> if journaling has been turned on for C<mongod>. 
+
+If C<mongod> is not running with journaling, then this option requests that writes be 
+immediately C<sync>ed to disk if true.
+
+This option can not be used simultaneously with the C<j> flag.
 
 =item j
 
-If true, awaits the journal commit before returning. If the server is running without journaling, it returns immediately, and successfully.
+If true, the client will block until write operations have been committed to the
+server's journal. Prior to MongoDB 2.6, this option was ignored if the server was 
+running without journaling. Starting with MongoDB 2.6, write operations will fail 
+if this option is used when the server is running without journaling.
 
 =back
 
@@ -323,18 +318,21 @@ L<MongoDB::Examples/"DATABASE COMMANDS"> section.
 See also core documentation on database commands:
 L<http://dochub.mongodb.org/core/commands>.
 
-=head2 eval ($code, $args?)
+=head2 eval ($code, $args?, $nolock?)
 
     my $result = $database->eval('function(x) { return "hello, "+x; }', ["world"]);
 
 Evaluate a JavaScript expression on the Mongo server. The C<$code> argument can
 be a string or an instance of L<MongoDB::Code>.  The C<$args> are an optional
-array of arguments to be passed to the C<$code> function.
+array of arguments to be passed to the C<$code> function.  C<$nolock> (default
+C<false>) prevents the eval command from taking the global write lock before
+evaluating the JavaScript.
 
 C<eval> is useful if you need to touch a lot of data lightly; in such a scenario
 the network transfer of the data could be a bottleneck. The C<$code> argument
 must be a JavaScript function. C<$args> is an array of parameters that will be
-passed to the function.  For more examples of using eval see
+passed to the function.  C<$nolock> is a L<boolean> value.  For more examples of
+using eval see
 L<http://www.mongodb.org/display/DOCS/Server-side+Code+Execution#Server-sideCodeExecution-Using{{db.eval%28%29}}>.
 
 =head1 AUTHORS
@@ -357,7 +355,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

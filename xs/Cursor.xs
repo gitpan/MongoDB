@@ -57,7 +57,7 @@ cursor_clone (pTHX_ MAGIC *mg, CLONE_PARAMS *params)
     Copy(cursor->buf.start, new_cursor->buf.start, buflen, char);
     new_cursor->buf.end = new_cursor->buf.start + buflen;
     new_cursor->buf.pos =
-	new_cursor->buf.start + (cursor->buf.pos - cursor->buf.start);
+  new_cursor->buf.start + (cursor->buf.pos - cursor->buf.start);
 
     mg->mg_ptr = (char *)new_cursor;
 
@@ -93,10 +93,21 @@ static mongo_cursor* get_cursor(SV *self) {
 static SV *request_id;
 
 static int has_next(SV *self, mongo_cursor *cursor) {
-  SV *link, *limit, *ns, *response_to;
+  SV *link, *limit, *ns, *response_to, *agg_batch_size_sv;;
   mongo_msg_header header;
   buffer buf;
   int size, heard;
+
+  /* if we have a firstBatch from an aggregation cursor,
+     then has_next is determined solely by the current 
+     batch count. */
+  agg_batch_size_sv   = perl_mongo_call_reader( self, "_agg_batch_size" );
+  if ( SvIV( agg_batch_size_sv ) > 0 ) {
+    SvREFCNT_dec(agg_batch_size_sv);
+    return 1;
+  }
+  SvREFCNT_dec(agg_batch_size_sv);
+
 
   limit = perl_mongo_call_reader (self, "_limit");
 
@@ -110,7 +121,6 @@ static int has_next(SV *self, mongo_cursor *cursor) {
     SvREFCNT_dec(limit);
     return 1;
   }
-
 
   link = perl_mongo_call_reader (self, "_client");
   ns = perl_mongo_call_reader (self, "_ns");
@@ -198,12 +208,22 @@ BOOT:
     request_id = get_sv("MongoDB::Cursor::_request_id", GV_ADD);
 
 void
-_init (self)
+_init (self, ...)
         SV *self
     PREINIT:
         mongo_cursor *cursor;
     CODE:
         Newxz(cursor, 1, mongo_cursor);
+
+        /* initialize a cursor ID manually if we are getting constructed
+           from an aggregation result */
+        if ( items > 1 ) { 
+          cursor->cursor_id = MONGO_64( SvIV( ST(1) ) );
+
+          /* if we are manually setting the cursor ID then we need to 
+             set cursor->num to the size of the first batch */
+          cursor->num = SvIV( perl_mongo_call_reader( self, "_agg_batch_size" ) );
+        } 
 
         // attach a mongo_cursor* to the MongoDB::Cursor
         perl_mongo_attach_ptr_to_instance(self, cursor, &cursor_vtbl);
@@ -228,22 +248,39 @@ next (self)
         mongo_cursor *cursor;
         SV *dt_type_sv;
         SV *inflate_dbrefs_sv;
+        SV *inflate_regexps_sv;
         SV *client_sv;
+        SV *agg_batch_size_sv;
+        AV *agg_batch;
+        SV *agg_doc;
     CODE:
         cursor = get_cursor(self);
         if (has_next(self, cursor)) {
           dt_type_sv          = perl_mongo_call_reader( self, "_dt_type" );
           inflate_dbrefs_sv   = perl_mongo_call_reader( self, "_inflate_dbrefs" );
+          inflate_regexps_sv  = perl_mongo_call_reader( self, "_inflate_regexps" );
           client_sv           = perl_mongo_call_reader( self, "_client" );
-          char *dt_type       = SvOK( dt_type_sv ) ? SvPV( dt_type_sv, SvLEN( dt_type_sv ) ) : NULL;
-          int  inflate_dbrefs = SvIV( inflate_dbrefs_sv );
+          agg_batch_size_sv   = perl_mongo_call_reader( self, "_agg_batch_size" );
 
-          RETVAL = perl_mongo_bson_to_sv( &cursor->buf, dt_type, inflate_dbrefs, client_sv );
+          char *dt_type       = SvOK( dt_type_sv ) ? SvPV( dt_type_sv, SvLEN( dt_type_sv ) ) : NULL;
+          int inflate_dbrefs  = SvIV( inflate_dbrefs_sv );
+          int inflate_regexps = SvIV( inflate_regexps_sv );
+          int agg_batch_size  = SvIV( agg_batch_size_sv );
+
+          if ( agg_batch_size > 0 ) { 
+            agg_batch = (AV *)SvRV( perl_mongo_call_reader( self, "_agg_first_batch" ) );
+            agg_doc = av_shift( agg_batch );
+            perl_mongo_call_method( self, "_agg_batch_size", G_DISCARD, 1, newSViv( agg_batch_size - 1 ) );
+
+            SvREFCNT_dec(agg_batch);
+            RETVAL = agg_doc;
+          } else { 
+            RETVAL = perl_mongo_buffer_to_sv( &cursor->buf, dt_type, inflate_dbrefs, inflate_regexps, client_sv );
+          }
 
           cursor->at++;
 
-          if (cursor->num == 1 &&
-              hv_exists((HV*)SvRV(RETVAL), "$err", strlen("$err"))) {
+          if (cursor->num == 1 && hv_exists((HV*)SvRV(RETVAL), "$err", strlen("$err"))) {
             SV **err = 0, **code = 0;
 
             err = hv_fetchs((HV*)SvRV(RETVAL), "$err", 0);
@@ -254,10 +291,21 @@ next (self)
               SV *conn = perl_mongo_call_method (self, "_client", 0, 0);
               set_disconnected(conn);
             }
-            
+          
+            SvREFCNT_dec(dt_type_sv);
+            SvREFCNT_dec(inflate_dbrefs_sv);
+            SvREFCNT_dec(inflate_regexps_sv);
+            SvREFCNT_dec(client_sv);
+            SvREFCNT_dec(agg_batch_size_sv);
             croak("query error: %s", SvPV_nolen(*err));
           }
-	} else {
+  
+          SvREFCNT_dec(dt_type_sv);
+          SvREFCNT_dec(inflate_dbrefs_sv);
+          SvREFCNT_dec(inflate_regexps_sv);
+          SvREFCNT_dec(client_sv);
+          SvREFCNT_dec(agg_batch_size_sv);
+        } else {
           RETVAL = newSV(0);
         }
     OUTPUT:
@@ -278,9 +326,9 @@ reset (self)
 
         perl_mongo_call_method (self, "started_iterating", G_DISCARD, 1, &PL_sv_no);
 
-	RETVAL = SvREFCNT_inc(self);
+  RETVAL = SvREFCNT_inc(self);
     OUTPUT:
-	RETVAL
+  RETVAL
         
 
 SV *

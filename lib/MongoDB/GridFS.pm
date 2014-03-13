@@ -15,10 +15,7 @@
 #
 
 package MongoDB::GridFS;
-{
-  $MongoDB::GridFS::VERSION = '0.702.2';
-}
-
+$MongoDB::GridFS::VERSION = '0.703_2';
 
 # ABSTRACT: A file storage utility
 
@@ -184,13 +181,15 @@ sub insert {
     }
     $fh->setpos($start_pos);
 
-    # get an md5 hash for the file. set the retry flag to 'true' incase the 
-    # database, collection, or indexes are missing. That way we can recreate them 
-    # retry the md5 calc.
-    my $result = $self->_calc_md5($id, $self->prefix, 1);
-
+    my %copy = %{$metadata};
     # compare the md5 hashes
     if ($options->{safe}) {
+        # get an md5 hash for the file. set the retry flag to 'true' incase the 
+        # database, collection, or indexes are missing. That way we can recreate them 
+        # retry the md5 calc.
+        my $result = $self->_calc_md5($id, $self->prefix, 1);
+        $copy{"md5"} = $result->{"md5"};
+
         my $md5 = Digest::MD5->new;
         $md5->addfile($fh);
         my $digest = $md5->hexdigest;
@@ -201,9 +200,7 @@ sub insert {
         }
     }
 
-    my %copy = %{$metadata};
     $copy{"_id"} = $id;
-    $copy{"md5"} = $result->{"md5"};
     $copy{"chunkSize"} = $MongoDB::GridFS::chunk_size;
     $copy{"uploadDate"} = DateTime->now;
     $copy{"length"} = $length;
@@ -247,6 +244,7 @@ sub drop {
 
     $self->files->drop;
     $self->chunks->drop;
+    $self->_ensure_indexes;
 }
 
 
@@ -275,7 +273,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 SYNOPSIS
 
@@ -432,7 +430,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

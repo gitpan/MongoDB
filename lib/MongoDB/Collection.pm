@@ -15,10 +15,7 @@
 #
 
 package MongoDB::Collection;
-{
-  $MongoDB::Collection::VERSION = '0.702.2';
-}
-
+$MongoDB::Collection::VERSION = '0.703_2';
 
 # ABSTRACT: A MongoDB Collection
 
@@ -27,6 +24,7 @@ use Tie::IxHash;
 use Moose;
 use Carp 'carp';
 use boolean;
+use Devel::Size 'total_size';
 
 has _database => (
     is       => 'ro',
@@ -53,19 +51,6 @@ sub _build_full_name {
     my $name    = $self->name;
     my $db_name = $self->_database->name;
     return "${db_name}.${name}";
-}
-
-
-sub AUTOLOAD {
-    my $self = shift @_;
-    our $AUTOLOAD;
-
-    my $coll = $AUTOLOAD;
-    $coll =~ s/.*:://;
-
-    carp sprintf q{AUTOLOADed collection method names are deprecated and will be removed in a future release. Use $collection->get_collection( '%s' ) instead.}, $coll;
-
-    return $self->get_collection($coll);
 }
 
 
@@ -103,6 +88,44 @@ sub to_index_string {
 }
 
 
+sub _select_cursor_client {
+    my ($conn, $ns, $query) = @_;
+
+    return $conn if !$conn->_readpref_pinned || !$conn->find_master;
+    return $conn->_master if _cmd_primary_only($ns, $query);
+    return $conn->_readpref_pinned;
+}
+
+sub _cmd_primary_only {
+    my ($ns, $query) = @_;
+
+    # these commands allow read preferences
+    my %readpref_commands = (
+        'group' => 1,
+        'aggregate' => 1,
+        'mapreduce' => 1,
+        'collstats' => 1,
+        'dbstats' => 1,
+        'count' => 1,
+        'distinct' => 1,
+        'geonear' => 1,
+        'geosearch' => 1,
+        'geowalk' => 1,
+        'text' => 1
+    );
+
+    if ($ns =~ /\$cmd/) {
+        foreach (keys %{$query}) {
+            return 0 if $readpref_commands{lc($_)};
+        }
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
+
 sub find {
     my ($self, $query, $attrs) = @_;
     # old school options - these should be set with MongoDB::Cursor methods
@@ -111,16 +134,29 @@ sub find {
     $limit   ||= 0;
     $skip    ||= 0;
 
-    my $q = $query || {};
     my $conn = $self->_database->_client;
+    my $q = $query || {};
     my $ns = $self->full_name;
+
+    my $slave_ok = ($conn->_readpref_mode == MongoDB::MongoClient->PRIMARY) ||
+                   _cmd_primary_only($ns, $q)
+                   ? 0 : 1;
+
     my $cursor = MongoDB::Cursor->new(
-	_client => $conn,
-	_ns => $ns,
-	_query => $q,
-	_limit => $limit,
-	_skip => $skip
+        _master    => $conn,
+        _client    => _select_cursor_client($conn, $ns, $q),
+        _ns        => $ns,
+        _query     => $q,
+        _limit     => $limit,
+        _skip      => $skip,
+        slave_okay => $slave_ok
     );
+
+    # add readpref info if connected to mongos
+    if ($conn->_readpref_pinned && $conn->_is_mongos && !_cmd_primary_only($ns, $q)) {
+        my $modeName = MongoDB::MongoClient->_READPREF_MODENAMES->[$conn->_readpref_mode];
+        $cursor->_add_readpref({mode => $modeName, tags => $conn->_readpref_tagsets});
+    }
 
     $cursor->_init;
     if ($sort_by) {
@@ -144,10 +180,34 @@ sub find_one {
     return $self->find($query)->limit(-1)->fields($fields)->next;
 }
 
+sub _split_batch { 
+    my ( $self, $docs ) = @_;
 
-sub insert {
+    # this will give us a rather inflated size as compared to the BSON
+    # serialized version of the structure, so we'll use it as a rather
+    # liberal estimate of when to split the batch.
+    my $size = total_size $docs;
+    return $docs if $size < 16_777_216;
+
+    my ( @left, @right );
+    @left  = @{$docs}[ 0                     .. int( @$docs / 2 ) - 1];
+    @right = @{$docs}[ int( @$docs / 2 )     .. $#$docs               ]; 
+
+    return ( total_size \@left  < 16_777_216 ? \@left  : $self->_split_batch( \@left ),
+             total_size \@right < 16_777_216 ? \@right : $self->_split_batch( \@right ) );
+}
+
+
+sub insert { 
+    my $self = shift;
+    my ( $object, $options ) = @_;
+    $self->legacy_insert( @_ );
+}
+
+sub legacy_insert {
     my ($self, $object, $options) = @_;
-    my ($id) = $self->batch_insert([$object], $options);
+    
+    my ($id) = $self->batch_insert( [ $object ], $options);
 
     return $id;
 }
@@ -155,6 +215,7 @@ sub insert {
 
 sub batch_insert {
     my ($self, $object, $options) = @_;
+
     confess 'not an array reference' unless ref $object eq 'ARRAY';
 
     my $add_ids = 1;
@@ -185,10 +246,17 @@ sub batch_insert {
     return $ids ? @$ids : $ids;
 }
 
+sub update { 
+    my $self = shift;
+    my ( $query, $object, $opts ) = @_;
 
-sub update {
+    return $self->legacy_update( @_ );
+}
+
+sub legacy_update {
     my ($self, $query, $object, $opts) = @_;
-
+    #$self->update_cmd( $query, $object, $opts ) if $self->_database->_client->_use_write_cmd;
+    
     # there used to be one option: upsert=0/1
     # now there are two, there will probably be
     # more in the future.  So, to support old code,
@@ -233,6 +301,9 @@ sub find_and_modify {
 
     my $result = $db->run_command( [ findAndModify => $self->name, %$opts ] );
 
+    if ( not ref $result ) {
+        die $result;
+    }
     if ( not $result->{ok} ) { 
         return if ( $result->{errmsg} eq 'No matching object found' );
     }
@@ -242,11 +313,49 @@ sub find_and_modify {
 
 
 sub aggregate { 
-    my ( $self, $pipeline ) = @_;
+    my ( $self, $pipeline, $opts ) = @_;
+    $opts = ref $opts eq 'HASH' ? $opts : { };
 
     my $db   = $self->_database;
 
-    my $result = $db->run_command( [ aggregate => $self->name, pipeline => $pipeline ] );
+    if ( exists $opts->{cursor} ) { 
+        $opts->{cursor} = { } unless ref $opts->{cursor} eq 'HASH';
+    }
+
+    # explain requires a boolean
+    if ( exists $opts->{explain} ) { 
+        $opts->{explain} = $opts->{explain} ? true : false;
+    }
+
+    my @command = ( aggregate => $self->name, pipeline => $pipeline, %$opts );
+    my $result = $db->run_command( \@command );
+
+    # if we got a cursor option then we need to construct a wonky cursor
+    # object on our end and populate it with the first batch, since 
+    # commands can't actually return cursors. 
+    if ( exists $opts->{cursor} ) { 
+        unless ( exists $result->{cursor} ) { 
+            die "no cursor returned from aggregation";
+        }
+
+        my $cursor = MongoDB::Cursor->new( 
+            started_iterating      => 1,              # we have the first batch
+            _client                => $db->_client,
+            _master                => $db->_client,   # fake this because we're already iterating
+            _ns                    => $result->{cursor}{ns},
+            _agg_first_batch       => $result->{cursor}{firstBatch}, 
+            _agg_batch_size        => scalar @{ $result->{cursor}{firstBatch} },  # for has_next
+            _query                 => \@command,
+        );
+
+        $cursor->_init( $result->{cursor}{id} );
+        return $cursor;
+    }
+
+    # return the whole result document if they want an explain
+    if ( $opts->{explain} ) { 
+        return $result;
+    }
 
     # TODO: handle errors?
 
@@ -274,8 +383,15 @@ sub rename {
 }
 
 
-sub remove {
+sub remove { 
+    my $self = shift;
+    my ( $query, $options ) = @_;
+    $self->legacy_remove( @_ );
+}
+
+sub legacy_remove {
     my ($self, $query, $options) = @_;
+    #$self->delete_cmd( $query, $options ) if $self->_database->_client->_use_write_cmd;
 
     my $conn = $self->_database->_client;
 
@@ -339,15 +455,31 @@ sub ensure_index {
     }
     $options->{'no_ids'} = 1;
 
+    foreach ("weights", "default_language", "language_override") {
+        if (exists $options->{$_}) {
+            $obj->Push("$_" => $options->{$_});
+        }
+    }
+
     if (exists $options->{expire_after_seconds}) {
         $obj->Push("expireAfterSeconds" => int($options->{expire_after_seconds}));
     }
 
     my ($db, $coll) = $ns =~ m/^([^\.]+)\.(.*)/;
 
-    my $indexes = $self->_database->get_collection("system.indexes");
-    return $indexes->insert($obj, $options);
-}
+    # try the new createIndexes command (mongodb 2.6), falling back to the old insert
+    # method if createIndexes is not available.
+    my $res = $self->_database->get_collection( '$cmd' )->find_one( { createIndexes => $obj } );
+    return $res if $res->{ok};
+
+    if ( ( not $res->{ok} )  && 
+         ( not exists $res->{code} or $res->{code} == 59 ) ) { 
+        my $indexes = $self->_database->get_collection("system.indexes");
+        return $indexes->insert($obj, $options);
+    } else { 
+        die "error creating index: " . $res->{errmsg};
+    }
+} 
 
 
 sub _make_safe {
@@ -360,7 +492,10 @@ sub _make_safe {
 
     $conn->send("$req$query");
 
-    my $cursor = MongoDB::Cursor->new(_ns => $info->{ns}, _client => $conn, _query => {});
+    my $cursor = MongoDB::Cursor->new(_ns => $info->{ns},
+                                      _master => $conn,
+                                      _client => $conn,
+                                      _query => {});
     $cursor->_init;
     $cursor->_request_id($info->{'request_id'});
 
@@ -462,7 +597,11 @@ sub drop {
     return;
 }
 
+sub bulk { 
+    my ( $self, %args ) = @_;
 
+    return MongoDB::Bulk->new( %args, collection => $self );
+}
 
 __PACKAGE__->meta->make_immutable;
 
@@ -478,7 +617,7 @@ MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 SYNOPSIS
 
@@ -644,9 +783,45 @@ match the query, it returns nothing.
 
     my $result = $collection->aggregate( [ ... ] );
 
-Run a query using the MongoDB 2.2+ aggregation framework. The argument is an array-ref of 
-aggregation pipeline operators. Returns an array-ref containing the results of 
-the query. See L<Aggregation|http://docs.mongodb.org/manual/aggregation/> in the MongoDB manual
+Run a query using the MongoDB 2.2+ aggregation framework. The first argument is an array-ref of 
+aggregation pipeline operators. 
+
+The type of return value from C<aggregate> depends on how you use it.
+
+=over 4
+
+=item * By default, the aggregation framework returns a document with an embedded array of results, and
+the C<aggregate> method returns a reference to that array.
+
+=item * MongoDB 2.6+ supports returning cursors from aggregation queries, allowing you to bypass
+the 16MB size limit of documents. If you specifiy a C<cursor> option, the C<aggregate> method
+will return a L<MongoDB::Cursor> object which can be iterated in the normal fashion.
+
+    my $cursor = $collection->aggregate( [ ... ], { cursor => 1 } );
+
+Specifying a C<cursor> option will cause an error on versions of MongoDB below 2.6.
+
+The C<cursor> option may also have some useful options of its own. Currently, the only one
+is C<batchSize>, which allows you to control how frequently the cursor must go back to the
+database for more documents.
+
+    my $cursor = $collection->aggregate( [ ... ], { cursor => { batchSize => 10 } } );
+
+=item * MongoDB 2.6+ supports an C<explain> option to aggregation queries to retrieve data
+about how the server will process a query pipeline.
+
+    my $result = $collection->aggregate( [ ... ], { explain => 1 } );
+
+In this case, C<aggregate> will return a document (not an array) containing the explanation
+structure.
+
+=item * Finally, MongoDB 2.6+ will return an empty results array if the C<$out> pipeline operator is used to 
+write aggregation results directly to a collection. Create a new C<Collection> object to 
+query the result collection.
+
+=back
+
+See L<Aggregation|http://docs.mongodb.org/manual/aggregation/> in the MongoDB manual
 for more information on how to construct aggregation queries.
 
 =head2 rename ("newcollectionname")
@@ -809,7 +984,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

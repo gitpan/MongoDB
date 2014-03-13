@@ -15,10 +15,7 @@
 #
 
 package MongoDB::GridFS::File;
-{
-  $MongoDB::GridFS::File::VERSION = '0.702.2';
-}
-
+$MongoDB::GridFS::File::VERSION = '0.703_2';
 
 # ABSTRACT: A Mongo GridFS file
 
@@ -48,7 +45,7 @@ sub print {
     my ($written, $pos) = (0, 0);
     my $start_pos = $fh->getpos();
 
-    $self->_grid->chunks->ensure_index(Tie::IxHash->new(files_id => 1, n => 1));
+    $self->_grid->chunks->ensure_index(Tie::IxHash->new(files_id => 1, n => 1), { safe => 1, unique => 1 });
 
     my $cursor = $self->_grid->chunks->query({"files_id" => $self->info->{"_id"}})->sort({"n" => 1});
 
@@ -121,7 +118,7 @@ MongoDB::GridFS::File - A Mongo GridFS file
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 SYNOPSIS
 
@@ -185,7 +182,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

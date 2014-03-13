@@ -21,28 +21,18 @@ use Test::More;
 use Test::Exception;
 use Test::Warn;
 
+use utf8;
+use Data::Types qw(:float);
+use Tie::IxHash;
+use Encode qw(encode decode);
 use MongoDB::Timestamp; # needed if db is being run as master
+
 use MongoDB;
 
 use lib "t/lib";
 use MongoDBTest '$conn', '$testdb';
 
-if ( $^V lt 5.14.0 ) { 
-    plan skip_all => 'we need perl 5.14 for regex tests';
-}
-
-plan tests => 2;
+plan tests => 1;
 
 
-$testdb->drop;
-
-my $coll = $testdb->get_collection('test_collection');
-
-my $test_regex = eval 'qr/foo/iu';    # eval regex to prevent compile failure on pre-5.14
-warning_like { 
-    $coll->insert( { name => 'foo', test_regex => $test_regex } )
-} qr{unsupported regex flag /u}, 'unsupported flag warning';
-
-
-my ( $doc ) = $coll->find_one( { name => 'foo' } );
-is $doc->{test_regex}, qr/foo/i;
+my $bulk = $testdb->get_collection( "test_collection" )->bulk;

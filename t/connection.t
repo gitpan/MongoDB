@@ -26,9 +26,9 @@ use MongoDB::Timestamp; # needed if db is being run as master
 use MongoDB;
 
 use lib "t/lib";
-use MongoDBTest '$conn';
+use MongoDBTest '$conn', '$testdb';
 
-plan tests => 27;
+plan tests => 32;
 
 throws_ok {
     MongoDB::MongoClient->new(host => 'localhost', port => 1, ssl => $ENV{MONGO_SSL});
@@ -76,16 +76,20 @@ SKIP: {
     is(MongoDB::MongoClient->new('host' => 'mongodb://:@localhost/?')->db_name, 'admin', 'connection uri empty extras');
 }
 
-my $db = $conn->get_database('test_database');
-isa_ok($db, 'MongoDB::Database', 'get_database');
+# get_database and drop 
+{
+    my $db = $conn->get_database($testdb->name);
+    isa_ok($db, 'MongoDB::Database', 'get_database');
 
-$db->get_collection('test_collection')->insert({ foo => 42 }, {safe => 1});
+    $db->get_collection('test_collection')->insert({ foo => 42 }, {safe => 1});
 
-ok((grep { $_ eq 'test_database' } $conn->database_names), 'database_names');
+    ok((grep { /testdb/ } $conn->database_names), 'database_names');
 
-my $result = $db->drop;
-is(ref $result, 'HASH', $result);
-is($result->{'ok'}, 1, 'db was dropped');
+    my $result = $db->drop;
+    is(ref $result, 'HASH', $result);
+    is($result->{'ok'}, 1, 'db was dropped');
+}
+
 
 # TODO: won't work on master/slave until SERVER-2329 is fixed
 # ok(!(grep { $_ eq 'test_database' } $conn->database_names), 'database got dropped');
@@ -106,7 +110,7 @@ is($result->{'ok'}, 1, 'db was dropped');
     $conn->wtimeout(100);
     is($conn->wtimeout, 100, "set wtimeout");
 
-    $db->drop;
+    $testdb->drop;
 }
 
 
@@ -136,11 +140,47 @@ is($result->{'ok'}, 1, 'db was dropped');
     }
 }
 
-END {
-    if ($conn) {
-        $conn->get_database( 'foo' )->drop;
-    }
-    if ($db) {
-        $db->drop;
-    }
+# wire protocol versions
+SKIP: { 
+    skip "no wire version check", 5, unless $conn->can( '_check_wire_version' );
+    # mock run_command so we can test our own isMaster responses
+    no warnings 'redefine';
+    my $server_doc = { ismaster => 1, 
+                       maxBsonObjectSize => 16777216,
+                       maxMessageSizeBytes => 48000000,
+                       ok => 1 };
+
+    my $old_method = \&MongoDB::Database::run_command;
+    local *MongoDB::Database::run_command = sub { 
+        my $self = shift;
+
+        if ( ref $_[0] eq 'HASH' && exists $_[0]{ismaster} ) { 
+            return $server_doc;
+        }
+
+        return $self->$old_method( @_ );
+    };
+
+
+    my $host = exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost';
+    my $test_conn1 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
+
+    is $test_conn1->min_wire_version, 0;
+    is $test_conn1->max_wire_version, 2;
+
+    $server_doc->{minWireVersion} = 0;
+    $server_doc->{maxWireVersion} = 2;
+
+    my $test_conn2 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
+
+    is $test_conn2->min_wire_version, 0;
+    is $test_conn2->max_wire_version, 2;
+
+    $server_doc->{minWireVersion} = 3;
+    $server_doc->{maxWireVersion} = 4;
+
+    throws_ok {
+        my $test_conn3 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
+    } qr/Incompatible wire protocol/i, 'exception on wire protocol';
+
 }

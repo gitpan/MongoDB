@@ -5,7 +5,6 @@ author:
   - 'Kristina Chodorow <kristina@mongodb.org>'
   - 'Mike Friedman <friedo@mongodb.com>'
 build_requires:
-  Config: 0
   Data::Dump: 0
   Data::Dumper: 0
   Data::Types: 0
@@ -13,7 +12,9 @@ build_requires:
   Devel::Peek: 0
   Exporter: 0
   File::Copy: 0
+  File::Path: 0
   File::Slurp: 0
+  File::Spec: 0
   File::Temp: 0
   FileHandle: 0
   JSON: 0
@@ -22,12 +23,13 @@ build_requires:
   Test::Warn: 0
   Try::Tiny: 0
   bigint: 0
+  lib: 0
   threads: 0
   utf8: 0
 configure_requires:
   ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.300034, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Dist::Zilla version 5.012, CPAN::Meta::Converter version 2.133380'
 license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -42,6 +44,7 @@ requires:
   Carp: 0
   Class::MOP::Class: 0
   DateTime: 0
+  Devel::Size: 0
   Digest::MD5: 0
   Encode: 0
   IO::File: 0
@@ -60,4 +63,4 @@ resources:
   bugtracker: https://jira.mongodb.org/browse/PERL
   homepage: https://github.com/mongodb/mongo-perl-driver
   repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.702.2
+version: 0.703_2

@@ -15,10 +15,7 @@
 #
 
 package MongoDB::Cursor;
-{
-  $MongoDB::Cursor::VERSION = '0.702.2';
-}
-
+$MongoDB::Cursor::VERSION = '0.703_2';
 
 # ABSTRACT: A cursor/iterator for Mongo query results
 use Moose;
@@ -42,8 +39,14 @@ has started_iterating => (
     default => 0,
 );
 
-has _client => (
+has _master => (
     is => 'ro',
+    isa => 'MongoDB::MongoClient',
+    required => 1,
+);
+
+has _client => (
+    is => 'rw',
     isa => 'MongoDB::MongoClient',
     required => 1,
 );
@@ -99,6 +102,8 @@ has immortal => (
 
 
 
+
+
 has partial => (
     is => 'rw',
     isa => 'Bool',
@@ -129,6 +134,20 @@ has _request_id => (
 );
 
 
+# special attributes for aggregation cursors
+has _agg_first_batch => (
+    is      => 'ro',
+    isa     => 'Maybe[ArrayRef]',
+);
+
+has _agg_batch_size => ( 
+    is      => 'rw',
+    isa     => 'Int',
+    default => 0,
+);
+
+
+
 sub _ensure_special {
     my ($self) = @_;
 
@@ -144,6 +163,11 @@ sub _ensure_special {
 sub _do_query {
     my ($self) = @_;
 
+    $self->_master->rs_refresh();
+
+    # in case the refresh caused a repin
+    $self->_client(MongoDB::Collection::_select_cursor_client($self->_master, $self->_ns, $self->_query));
+
     if ($self->started_iterating) {
         return;
     }
@@ -156,8 +180,21 @@ sub _do_query {
     my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit, $self->_query, $self->_fields);
     $self->_request_id($info->{'request_id'});
 
-    $self->_client->send($query);
-    $self->_client->recv($self);
+    eval {
+        $self->_client->send($query);
+        $self->_client->recv($self); 
+    };
+    if ($@ && $self->_master->_readpref_pinned) {
+        $self->_master->repin();
+        $self->_client($self->_master->_readpref_pinned);
+        $self->_client->send($query); 
+        $self->_client->recv($self); 
+    }
+    elsif ($@) {
+        # rethrow the exception if read preference
+        # has not been set
+        die $@;
+    }
 
     $self->started_iterating(1);
 }
@@ -198,6 +235,18 @@ sub limit {
     return $self;
 }
 
+
+
+sub max_time_ms { 
+    my ( $self, $num ) = @_;
+    confess "can not set max_time_ms after querying"
+      if $self->started_iterating;
+
+    $self->_ensure_special;
+    $self->_query->{'$maxTimeMS'} = $num;
+    return $self;
+
+}
 
 
 sub tailable {
@@ -291,6 +340,13 @@ sub count {
 }
 
 
+sub _add_readpref {
+    my ($self, $prefdoc) = @_;
+    $self->_ensure_special;
+    $self->_query->{'$readPreference'} = $prefdoc;
+}
+
+
 # shortcut to make some XS code saner
 sub _dt_type { 
     my $self = shift;
@@ -300,6 +356,11 @@ sub _dt_type {
 sub _inflate_dbrefs {
     my $self = shift;
     return $self->_client->inflate_dbrefs;
+}
+
+sub _inflate_regexps { 
+    my $self = shift;
+    return $self->_client->inflate_regexps;
 }
 
 
@@ -313,6 +374,16 @@ sub all {
     }
 
     return @ret;
+}
+
+
+sub read_preference {
+    my ($self, $mode, $tagsets) = @_;
+
+    $self->_master->read_preference($mode, $tagsets);
+
+    $self->_client($self->_master->_readpref_pinned);
+    return $self;
 }
 
 
@@ -330,7 +401,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 SYNOPSIS
 
@@ -445,6 +516,13 @@ Returns this cursor for chaining operations.
 
 Returns a maximum of N results.
 Returns this cursor for chaining operations.
+
+=head2 max_time_ms( $millis )
+
+    $cursor = $coll->query->max_time_ms( 500 );
+
+Causes the server to abort the operation if the specified time in 
+milliseconds is exceeded. 
 
 =head2 tailable ($bool)
 
@@ -573,6 +651,21 @@ The index of the result that the current batch of results starts at.
 
 Returns a list of all objects in the result.
 
+=head2 read_preference ($mode, $tagsets)
+
+    my $cursor = $coll->find()->read_preference(MongoDB::MongoClient->PRIMARY_PREFERRED, [{foo => 'bar'}]);
+
+Sets read preference for the cursor's connection. The $mode argument
+should be a constant in MongoClient (PRIMARY, PRIMARY_PREFERRED, SECONDARY,
+SECONDARY_PREFERRED). The $tagsets specify selection criteria for secondaries
+in a replica set and should be an ArrayRef whose array elements are HashRefs.
+This is a convenience method which is identical in function to
+L<MongoDB::MongoClient/read_preference>.
+In order to use read preference, L<MongoDB::MongoClient/find_master> must be set.
+For core documentation on read preference see L<http://docs.mongodb.org/manual/core/read-preference/>.
+
+Returns $self so that this method can be chained.
+
 =head1 AUTHOR
 
   Kristina Chodorow <kristina@mongodb.org>
@@ -597,7 +690,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

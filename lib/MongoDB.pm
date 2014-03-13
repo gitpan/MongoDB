@@ -19,11 +19,8 @@ use strict;
 use warnings;
 
 package MongoDB;
-{
-  $MongoDB::VERSION = '0.702.2';
-}
 # ABSTRACT: A MongoDB Driver for Perl
-
+$MongoDB::VERSION = '0.703_2';
 use XSLoader;
 use MongoDB::Connection;
 use MongoDB::MongoClient;
@@ -31,8 +28,14 @@ use MongoDB::Database;
 use MongoDB::Collection;
 use MongoDB::DBRef;
 use MongoDB::OID;
+use MongoDB::Timestamp;
+use MongoDB::BSON::Binary;
+use MongoDB::BSON::Regexp;
+use MongoDB::Bulk;
 
-XSLoader::load(__PACKAGE__, $MongoDB::VERSION, int rand(2 ** 24));
+XSLoader::load(__PACKAGE__, $MongoDB::VERSION);
+
+*read_documents = \&MongoDB::BSON::decode_bson;
 
 1;
 
@@ -46,7 +49,7 @@ MongoDB - A MongoDB Driver for Perl
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 SYNOPSIS
 
@@ -253,7 +256,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

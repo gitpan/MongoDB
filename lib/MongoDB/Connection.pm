@@ -15,10 +15,7 @@
 #
 
 package MongoDB::Connection;
-{
-  $MongoDB::Connection::VERSION = '0.702.2';
-}
-
+$MongoDB::Connection::VERSION = '0.703_2';
 # ABSTRACT: A connection to a MongoDB server (DEPRECATED)
 
 use Moose;
@@ -50,20 +47,6 @@ around 'new' => sub {
 
 
 
-sub AUTOLOAD {
-    my $self = shift @_;
-    our $AUTOLOAD;
-
-    my $db = $AUTOLOAD;
-    $db =~ s/.*:://;
-
-    carp sprintf q{AUTOLOADed database method names are deprecated and will be removed in a future release. Use $client->get_database( '%s' ) instead.}, $db;
-
-    return $self->get_database($db);
-}
-
-
-
 __PACKAGE__->meta->make_immutable ( inline_destructor => 0, inline_constructor => 0 );
 
 1;
@@ -78,7 +61,7 @@ MongoDB::Connection - A connection to a MongoDB server (DEPRECATED)
 
 =head1 VERSION
 
-version 0.702.2
+version 0.703_2
 
 =head1 DEPRECATED
 
@@ -408,7 +391,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2013 by MongoDB, Inc..
+This software is Copyright (c) 2014 by MongoDB, Inc..
 
 This is free software, licensed under:
 

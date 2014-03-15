@@ -1,66 +1,23 @@
 ---
-abstract: 'A MongoDB Driver for Perl'
+abstract: 'Super Awesome Perl Library'
 author:
-  - 'Florian Ragwitz <rafl@debian.org>'
-  - 'Kristina Chodorow <kristina@mongodb.org>'
-  - 'Mike Friedman <friedo@mongodb.com>'
+  - 'Al Newkirk <anewkirk@ana.io>'
 build_requires:
-  Data::Dump: 0
-  Data::Dumper: 0
-  Data::Types: 0
-  DateTime::Tiny: 0
-  Devel::Peek: 0
-  Exporter: 0
-  File::Copy: 0
-  File::Path: 0
-  File::Slurp: 0
-  File::Spec: 0
-  File::Temp: 0
-  FileHandle: 0
-  JSON: 0
-  Test::Exception: 0
-  Test::More: 0
-  Test::Warn: 0
-  Try::Tiny: 0
-  bigint: 0
-  lib: 0
-  threads: 0
-  utf8: 0
+  perl: v5.10.0
 configure_requires:
   ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 5.012, CPAN::Meta::Converter version 2.133380'
-license: apache
+generated_by: 'Dist::Zilla version 5.013, CPAN::Meta::Converter version 2.132830'
+license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
 name: MongoDB
-no_index:
-  directory:
-    - ext
-    - inc
-    - t
 requires:
-  Carp: 0
-  Class::MOP::Class: 0
-  DateTime: 0
-  Devel::Size: 0
-  Digest::MD5: 0
-  Encode: 0
-  IO::File: 0
-  Moose: 0
-  Moose::Util::TypeConstraints: 0
-  Scalar::Util: 0
-  Tie::IxHash: 0
-  XSLoader: 0
-  boolean: 0
-  constant: 0
-  overload: 0
-  perl: v5.8.0
-  strict: 0
-  warnings: 0
+  perl: v5.10.0
 resources:
-  bugtracker: https://jira.mongodb.org/browse/PERL
-  homepage: https://github.com/mongodb/mongo-perl-driver
-  repository: git://github.com/mongodb/mongo-perl-driver.git
-version: 0.703_2
+  bugtracker: https://github.com/alnewkirk/MongoDB/issues
+  homepage: https://github.com/alnewkirk/MongoDB
+  repository: https://github.com/alnewkirk/MongoDB.git
+version: 0.01
+x_authority: cpan:AWNCORP

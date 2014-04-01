@@ -1,23 +1,122 @@
 ---
-abstract: 'Super Awesome Perl Library'
+abstract: 'A MongoDB Driver for Perl'
 author:
-  - 'Al Newkirk <anewkirk@ana.io>'
+  - 'Florian Ragwitz <rafl@debian.org>'
+  - 'Kristina Chodorow <kristina@mongodb.org>'
+  - 'Mike Friedman <friedo@mongodb.com>'
+  - 'David Golden <david.golden@mongodb.org>'
 build_requires:
-  perl: v5.10.0
+  Data::Dump: '0'
+  Data::Dumper: '0'
+  Data::Types: '0'
+  DateTime::Tiny: '0'
+  Devel::Peek: '0'
+  Exporter: '0'
+  ExtUtils::MakeMaker: '0'
+  File::Copy: '0'
+  File::Path: '0'
+  File::Slurp: '0'
+  File::Spec: '0'
+  File::Spec::Functions: '0'
+  File::Temp: '0'
+  FileHandle: '0'
+  JSON: '0'
+  List::Util: '0'
+  Test::Exception: '0'
+  Test::More: '0'
+  Test::Warn: '0'
+  Try::Tiny: '0'
+  bigint: '0'
+  lib: '0'
+  threads: '0'
+  utf8: '0'
 configure_requires:
-  ExtUtils::MakeMaker: 6.30
+  Config::AutoConf: '0.22'
+  ExtUtils::MakeMaker: '6.30'
+  Path::Tiny: '0.052'
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 5.013, CPAN::Meta::Converter version 2.132830'
-license: perl
+generated_by: 'Dist::Zilla version 5.015, CPAN::Meta::Converter version 2.140640'
+license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+  version: '1.4'
 name: MongoDB
+no_index:
+  directory:
+    - inc
+    - t
+    - xt
+provides:
+  MongoDB:
+    file: lib/MongoDB.pm
+    version: v0.703.3
+  MongoDB::BSON:
+    file: lib/MongoDB/BSON.pm
+    version: v0.703.3
+  MongoDB::BSON::Binary:
+    file: lib/MongoDB/BSON/Binary.pm
+    version: v0.703.3
+  MongoDB::BSON::Regexp:
+    file: lib/MongoDB/BSON/Regexp.pm
+    version: v0.703.3
+  MongoDB::Bulk:
+    file: lib/MongoDB/Bulk.pm
+    version: v0.703.3
+  MongoDB::Code:
+    file: lib/MongoDB/Code.pm
+    version: v0.703.3
+  MongoDB::Collection:
+    file: lib/MongoDB/Collection.pm
+    version: v0.703.3
+  MongoDB::Connection:
+    file: lib/MongoDB/Connection.pm
+    version: v0.703.3
+  MongoDB::Cursor:
+    file: lib/MongoDB/Cursor.pm
+    version: v0.703.3
+  MongoDB::DBRef:
+    file: lib/MongoDB/DBRef.pm
+    version: v0.703.3
+  MongoDB::Database:
+    file: lib/MongoDB/Database.pm
+    version: v0.703.3
+  MongoDB::GridFS:
+    file: lib/MongoDB/GridFS.pm
+    version: v0.703.3
+  MongoDB::GridFS::File:
+    file: lib/MongoDB/GridFS/File.pm
+    version: v0.703.3
+  MongoDB::MongoClient:
+    file: lib/MongoDB/MongoClient.pm
+    version: v0.703.3
+  MongoDB::OID:
+    file: lib/MongoDB/OID.pm
+    version: v0.703.3
+  MongoDB::Timestamp:
+    file: lib/MongoDB/Timestamp.pm
+    version: v0.703.3
 requires:
-  perl: v5.10.0
+  Carp: '0'
+  Class::MOP::Class: '0'
+  DateTime: '0.78'
+  Devel::Size: '0'
+  Digest::MD5: '0'
+  Encode: '0'
+  IO::File: '0'
+  Moose: '0'
+  Moose::Util::TypeConstraints: '0'
+  Scalar::Util: '0'
+  Tie::IxHash: '0'
+  XSLoader: '0'
+  boolean: '0'
+  constant: '0'
+  overload: '0'
+  perl: v5.8.0
+  strict: '0'
+  version: '0'
+  warnings: '0'
 resources:
-  bugtracker: https://github.com/alnewkirk/MongoDB/issues
-  homepage: https://github.com/alnewkirk/MongoDB
-  repository: https://github.com/alnewkirk/MongoDB.git
-version: 0.01
-x_authority: cpan:AWNCORP
+  bugtracker: https://jira.mongodb.org/browse/PERL
+  homepage: https://github.com/mongodb/mongo-perl-driver
+  repository: https://github.com/mongodb/mongo-perl-driver.git
+version: v0.703.3

@@ -28,7 +28,7 @@ use MongoDB;
 use lib "t/lib";
 use MongoDBTest '$conn', '$testdb';
 
-plan tests => 32;
+plan tests => 33;
 
 throws_ok {
     MongoDB::MongoClient->new(host => 'localhost', port => 1, ssl => $ENV{MONGO_SSL});
@@ -150,8 +150,8 @@ SKIP: {
                        maxMessageSizeBytes => 48000000,
                        ok => 1 };
 
-    my $old_method = \&MongoDB::Database::run_command;
-    local *MongoDB::Database::run_command = sub { 
+    my $old_method = \&MongoDB::Database::_try_run_command;
+    local *MongoDB::Database::_try_run_command = sub {
         my $self = shift;
 
         if ( ref $_[0] eq 'HASH' && exists $_[0]{ismaster} ) { 
@@ -183,4 +183,16 @@ SKIP: {
         my $test_conn3 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
     } qr/Incompatible wire protocol/i, 'exception on wire protocol';
 
+}
+
+# test for PERL-264
+{
+    my $host = exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost';
+    my ($connections, $start);
+    for (1..10) {
+        my $conn2 = MongoDB::MongoClient->new("host" => $host, ssl => $ENV{MONGO_SSL});
+        $connections =  $conn->get_database("admin")->eval("db.serverStatus().connections.current");
+        $start = $connections unless defined $start
+    }
+    is(abs($connections-$start) < 3, 1, 'connection dropped after scope');
 }

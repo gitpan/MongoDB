@@ -20,7 +20,7 @@ package MongoDB::Cursor;
 # ABSTRACT: A cursor/iterator for Mongo query results
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use Moose;
 use boolean;
@@ -237,6 +237,15 @@ has _agg_first_batch => (
 has _agg_batch_size => ( 
     is      => 'rw',
     isa     => 'Int',
+    default => 0,
+);
+
+# special flag for parallel scan cursors, since they
+# start out empty
+
+has _is_parallel => (
+    is      => 'ro',
+    isa     => 'Bool',
     default => 0,
 );
 
@@ -496,6 +505,8 @@ sub hint {
 
 sub explain {
     my ($self) = @_;
+    confess "cannot explain a parallel scan"
+        if $self->_is_parallel;
     my $temp = $self->_limit;
     if ($self->_limit > 0) {
         $self->_limit($self->_limit * -1);
@@ -525,6 +536,9 @@ sub explain {
 
 sub count {
     my ($self, $all) = @_;
+
+    confess "cannot count a parallel scan"
+        if $self->_is_parallel;
 
     my ($db, $coll) = $self->_ns =~ m/^([^\.]+)\.(.*)/;
     my $cmd = new Tie::IxHash(count => $coll);
@@ -579,7 +593,15 @@ sub _inflate_regexps {
 #pod called on the cursor (sort, limit, etc.) and subsequent calls to
 #pod next, has_next, or all will re-query the database.
 #pod
-#pod
+#pod =cut
+
+sub reset {
+    my ($self) = @_;
+    confess "cannot reset a parallel scan"
+        if $self->_is_parallel;
+    return $self->_reset;
+}
+
 #pod =head2 has_next
 #pod
 #pod     while ($cursor->has_next) {
@@ -690,7 +712,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 SYNOPSIS
 

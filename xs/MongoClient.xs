@@ -259,12 +259,13 @@ send(self, str)
          RETVAL
 
 
-void
+int
 recv(self, cursor)
-         SV *cursor
-     CODE:
-         mongo_link_hear(cursor);
-
+        SV *cursor
+    CODE:
+        RETVAL = mongo_link_hear(cursor);
+    OUTPUT:
+        RETVAL
 
 SV *
 _compile_flags(self)
@@ -277,7 +278,7 @@ _compile_flags(self)
 #ifdef MONGO_SASL
         hv_store( flags, "--sasl", 6, newSViv( 1 ), 0 );
 #endif
-        RETVAL = newRV_noinc( flags );
+        RETVAL = newRV_noinc((SV *) flags );
     OUTPUT:
         RETVAL
 

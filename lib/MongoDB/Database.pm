@@ -20,7 +20,7 @@ package MongoDB::Database;
 # ABSTRACT: A MongoDB Database
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use Moose;
 use MongoDB::GridFS;
@@ -99,6 +99,15 @@ sub run_command {
     $obj->{'errmsg'};
 }
 
+# same as run_command but throws an exception on error; private
+# for now until exception handling is overhauled
+sub _try_run_command {
+    my ($self, $command) = @_;
+    my $obj = $self->get_collection('$cmd')->find_one($command);
+    return $obj if $obj->{ok};
+    confess $obj->{'errmsg'};
+}
+
 
 sub eval {
     my ($self, $code, $args, $nolock) = @_;
@@ -133,7 +142,7 @@ MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 SYNOPSIS
 

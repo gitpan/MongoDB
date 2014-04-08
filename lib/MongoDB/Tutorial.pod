@@ -28,7 +28,7 @@ MongoDB::Tutorial - Getting started with MongoDB
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 DESCRIPTION
 

@@ -28,8 +28,6 @@ use MongoDB;
 use lib "t/lib";
 use MongoDBTest '$conn', '$testdb';
 
-plan tests => 22;
-
 # get_database
 {
     isa_ok($conn, 'MongoDB::MongoClient');
@@ -108,8 +106,7 @@ SKIP: {
     is('hello, world', $hello, 'db eval');
 
     my $err = $testdb->eval('function(x) { xreturn "hello, "+x; }', ["world"]);
-    # skip until JS error reporting stabilizes 
-    #like($err, qr/(?:compile|execution) failed/, 'js err');
+    like( $err, qr/SyntaxError/, 'js err');
 }
 
 # tie
@@ -121,3 +118,4 @@ SKIP: {
     is($result->{ok}, 1);
 }
 
+done_testing;

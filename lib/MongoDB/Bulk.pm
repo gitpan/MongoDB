@@ -19,7 +19,7 @@ package MongoDB::Bulk;
 # ABSTRACT: MongoDB bulk write interface
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use boolean;
 use Moose;
@@ -180,7 +180,7 @@ MongoDB::Bulk - MongoDB bulk write interface
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 AUTHORS
 

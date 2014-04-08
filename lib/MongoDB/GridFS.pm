@@ -20,7 +20,7 @@ package MongoDB::GridFS;
 # ABSTRACT: A file storage utility
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use Moose;
 use MongoDB::GridFS::File;
@@ -144,9 +144,12 @@ sub _ensure_indexes {
 #pod
 #pod =head2 get($id)
 #pod
-#pod     my $file = $grid->get("my file");
+#pod     my $file = $grid->get($id);
 #pod
 #pod Get a file from GridFS based on its _id.  Returns a L<MongoDB::GridFS::File>.
+#pod
+#pod To retrieve a file based on metadata like C<filename>, use the L</find_one>
+#pod method instead.
 #pod
 #pod =cut
 
@@ -163,6 +166,12 @@ sub get {
 #pod Inserts a file into GridFS, adding a L<MongoDB::OID> as the _id field if the
 #pod field is not already defined.  This is a wrapper for C<MongoDB::GridFS::insert>,
 #pod see that method below for more information.
+#pod
+#pod To use a filename as the _id for subsequent C<get> calls, you must set _id
+#pod explicitly:
+#pod
+#pod     $grid->put($fh, {_id => "pic.jpg", filename => "pic.jpg"});
+#pod     my $file = $grid->get("pic.jpg");
 #pod
 #pod Returns the _id field.
 #pod
@@ -419,7 +428,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 SYNOPSIS
 
@@ -468,9 +477,12 @@ in the files collection it belongs to).
 
 =head2 get($id)
 
-    my $file = $grid->get("my file");
+    my $file = $grid->get($id);
 
 Get a file from GridFS based on its _id.  Returns a L<MongoDB::GridFS::File>.
+
+To retrieve a file based on metadata like C<filename>, use the L</find_one>
+method instead.
 
 =head2 put($fh, $metadata)
 
@@ -479,6 +491,12 @@ Get a file from GridFS based on its _id.  Returns a L<MongoDB::GridFS::File>.
 Inserts a file into GridFS, adding a L<MongoDB::OID> as the _id field if the
 field is not already defined.  This is a wrapper for C<MongoDB::GridFS::insert>,
 see that method below for more information.
+
+To use a filename as the _id for subsequent C<get> calls, you must set _id
+explicitly:
+
+    $grid->put($fh, {_id => "pic.jpg", filename => "pic.jpg"});
+    my $file = $grid->get("pic.jpg");
 
 Returns the _id field.
 

@@ -19,7 +19,7 @@ package MongoDB::MongoClient;
 # ABSTRACT: A connection to a MongoDB server
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use Moose;
 use Moose::Util::TypeConstraints;
@@ -33,6 +33,7 @@ use Carp 'carp', 'croak';
 use Scalar::Util 'reftype';
 use boolean;
 use Encode;
+use Try::Tiny;
 
 use constant {
     PRIMARY             => 0, 
@@ -478,12 +479,12 @@ sub get_master {
     }
     # auto-detect master
     else {
-        my $master = $conn->get_database($self->db_name)->run_command({"ismaster" => 1});
+        my $master = try {
+            $conn->get_database($self->db_name)->_try_run_command({"ismaster" => 1})
+        };
 
         # check for errors
-        if (ref($master) eq 'SCALAR') {
-            return -1;
-        }
+        return -1 unless $master;
 
         # msg field from ismaster command will
         # be set if in a sharded environment 
@@ -525,8 +526,10 @@ sub get_master {
             }
 
             # double-check that this is master
-            my $result = $primary->get_database("admin")->run_command({"ismaster" => 1});
-            if ($result->{'ismaster'}) {
+            my $result = try {
+                $primary->get_database("admin")->_try_run_command({"ismaster" => 1})
+            };
+            if ($result && $result->{'ismaster'}) {
                 $self->_master($primary);
                 return $self->_master;
             }
@@ -626,14 +629,11 @@ sub _check_ok {
 
     foreach (1 .. $retries) {
 
-        my $status;
-        eval {
-            $status = $self->get_database('admin')->run_command({ping => 1});
+        my $status = try {
+            $self->get_database('admin')->_try_run_command({ping => 1});
         };
 
-        if (!$@ && $status->{'ok'}) {
-            return 1;
-        }
+        return 1 if $status;
     }
 
     return 0;
@@ -762,9 +762,9 @@ sub authenticate {
 
     # get the nonce
     my $db = $self->get_database($dbname);
-    my $result = $db->run_command({getnonce => 1});
-    if (!$result->{'ok'}) {
-        return $result;
+    my $result = eval { $db->_try_run_command({getnonce => 1}) };
+    if (!$result) {
+        return $@
     }
 
     my $nonce = $result->{'nonce'};
@@ -869,7 +869,7 @@ sub _check_wire_version {
     my ( $self ) = @_;
     # check our wire protocol version compatibility
     
-    my $master = $self->get_database( $self->db_name )->run_command( { ismaster => 1 } );
+    my $master = $self->get_database( $self->db_name )->_try_run_command( { ismaster => 1 } );
 
     if ( exists $master->{minWireVersion} && exists $master->{maxWireVersion} ) {
         if (    ( $master->{minWireVersion} > $self->max_wire_version )
@@ -894,7 +894,7 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 SYNOPSIS
 
@@ -1215,14 +1215,12 @@ Low-level function to send a string directly to the database.  Use
 L<MongoDB::write_insert>, L<MongoDB::write_update>, L<MongoDB::write_remove>, or
 L<MongoDB::write_query> to create a valid string.
 
-=head2 recv(\%info)
+=head2 recv($cursor)
 
-    my $cursor = $client->recv({ns => "foo.bar"});
+    my $ok = $client->recv($cursor);
 
-Low-level function to receive a response from the database. Returns a
-C<MongoDB::Cursor>.  At the moment, the only required field for C<$info> is
-"ns", although "request_id" is likely to be required in the future.  The
-C<$info> hash will be automatically created for you by L<MongoDB::write_query>.
+Low-level function to receive a response from the database into a cursor.
+Dies on error.  Returns true if any results were received and false otherwise.
 
 =head2 fsync(\%args)
 

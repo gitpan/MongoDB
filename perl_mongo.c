@@ -422,7 +422,7 @@ elem_to_sv (const bson_iter_t * iter, char *dt_type, int inflate_dbrefs, int inf
     break;
   }
   case BSON_TYPE_INT64: {
-#if defined(USE_64_BIT_INT)
+#if defined(MONGO_USE_64_BIT_INT)
     value = newSViv(bson_iter_int64(iter));
 #else
     value = newSVnv((double)MONGO_64p(bson_iter_int64(iter)));
@@ -586,8 +586,9 @@ elem_to_sv (const bson_iter_t * iter, char *dt_type, int inflate_dbrefs, int inf
     bson_t bson;
     bson_iter_t child;
 
-    bson_init_static(&bson, scope, scope_len);
-    bson_iter_init(&child, &bson);
+    if ( ! ( bson_init_static(&bson, scope, scope_len) && bson_iter_init(&child, &bson) ) ) {
+        croak("error iterating BSON type %d\n", bson_iter_type(iter));
+    }
 
     SV * scope_sv = bson_to_sv(&child, dt_type, inflate_dbrefs, inflate_regexps, client );
     value = perl_mongo_construct_instance("MongoDB::Code", "code", code_sv, "scope", scope_sv, NULL);
@@ -668,7 +669,9 @@ perl_mongo_bson_to_sv (const bson_t * bson, char *dt_type, int inflate_dbrefs, i
   use_binary = get_sv("MongoDB::BSON::use_binary", 0);
 
   bson_iter_t iter;
-  bson_iter_init(&iter, bson);
+  if ( ! bson_iter_init(&iter, bson) ) {
+      croak( "error creating BSON iterator" );
+  }
 
   return bson_to_sv(&iter, dt_type, inflate_dbrefs, inflate_regexps, client);
 }
@@ -858,7 +861,7 @@ hv_to_bson (bson_t * bson, SV *sv, AV *ids, stackette *stack, int is_insert)
     SV **hval;
     STRLEN len;
     const char *key = HePV (he, len);
-    const char *utf8 = HeUTF8(he);
+    uint32_t utf8 = HeUTF8(he);
     containsNullChar(key, len);
     /* if we've already added the oid field, continue */
     if (ids && strcmp(key, "_id") == 0) {
@@ -870,10 +873,10 @@ hv_to_bson (bson_t * bson, SV *sv, AV *ids, stackette *stack, int is_insert)
      * so we're using hv_fetch
      */
     if ((hval = hv_fetch(hv, key, utf8 ? -len : len, 0)) == 0) {
-      croak("could not find hash value for key %s, len:%d", key, len);
+      croak("could not find hash value for key %s, len:%lu", key, len);
     }
     if (!utf8) {
-      key = bytes_to_utf8((const U8 *)key, &len);
+      key = (const char *) bytes_to_utf8((const U8 *)key, &len);
     }
     append_sv (bson, key, *hval, stack, is_insert);
     if (!utf8) {
@@ -1376,7 +1379,7 @@ append_sv (bson_t * bson, const char * in_key, SV *sv, stackette *stack, int is_
 
       // if it's publicly an int OR (privately an int AND not publicly a string)
       if (aggressively_number || (!is_string && (SvIOK(sv) || (SvIOKp(sv) && !SvPOK(sv))))) {
-#if defined(USE_64_BIT_INT)
+#if defined(MONGO_USE_64_BIT_INT)
         bson_append_int64(bson, key, -1, (int64_t)SvIV(sv));
 #else
         bson_append_int32(bson, key, -1, (int)SvIV(sv));
@@ -1476,7 +1479,7 @@ static void serialize_regex_flags(char * flags, SV *sv) {
 static void serialize_binary(bson_t * bson, const char * key, bson_subtype_t subtype, SV * sv)
 {
     STRLEN len;
-    uint8_t * bytes = SvPVbyte(sv, len);
+    uint8_t * bytes = (uint8_t *) SvPVbyte(sv, len);
 
     bson_append_binary(bson, key, -1, subtype, bytes, len);
 }

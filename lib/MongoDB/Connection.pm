@@ -19,7 +19,7 @@ package MongoDB::Connection;
 # ABSTRACT: A connection to a MongoDB server (DEPRECATED)
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use Moose;
 
@@ -64,7 +64,7 @@ MongoDB::Connection - A connection to a MongoDB server (DEPRECATED)
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 DEPRECATED
 

@@ -20,13 +20,14 @@ package MongoDB::Collection;
 # ABSTRACT: A MongoDB Collection
 
 use version;
-our $VERSION = 'v0.703.3'; # TRIAL
+our $VERSION = 'v0.703.4'; # TRIAL
 
 use Tie::IxHash;
 use Moose;
 use Carp 'carp';
 use boolean;
 use Devel::Size 'total_size';
+use Try::Tiny;
 
 has _database => (
     is       => 'ro',
@@ -301,16 +302,16 @@ sub find_and_modify {
     my $conn = $self->_database->_client;
     my $db   = $self->_database;
 
-    my $result = $db->run_command( [ findAndModify => $self->name, %$opts ] );
-
-    if ( not ref $result ) {
-        die $result;
+    my $result;
+    try {
+        $result = $db->_try_run_command( [ findAndModify => $self->name, %$opts ] )
     }
-    if ( not $result->{ok} ) { 
-        return if ( $result->{errmsg} eq 'No matching object found' );
-    }
+    catch {
+        die $_ unless $_ eq 'No matching object found';
+    };
 
-    return $result->{value};
+    return $result->{value} if $result;
+    return;
 }
 
 
@@ -330,7 +331,7 @@ sub aggregate {
     }
 
     my @command = ( aggregate => $self->name, pipeline => $pipeline, %$opts );
-    my $result = $db->run_command( \@command );
+    my $result = $db->_try_run_command( \@command );
 
     # if we got a cursor option then we need to construct a wonky cursor
     # object on our end and populate it with the first batch, since 
@@ -364,6 +365,41 @@ sub aggregate {
     return $result->{result};
 }
 
+sub parallel_scan {
+    my ( $self, $num_cursors, $opts ) = @_;
+    unless (defined $num_cursors && $num_cursors == int($num_cursors)
+        && $num_cursors > 0 && $num_cursors <= 10000
+    ) {
+        Carp::croak( "first argument to parallel_scan must be a positive integer between 1 and 10000" )
+    }
+    $opts = ref $opts eq 'HASH' ? $opts : { };
+
+    my $db   = $self->_database;
+
+    my @command = ( parallelCollectionScan => $self->name, numCursors => $num_cursors );
+    my $result = $db->_try_run_command( \@command );
+
+    Carp::croak("No cursors returned")
+        unless $result->{cursors} && ref $result->{cursors} eq 'ARRAY';
+
+    my @cursors;
+    for my $c ( map { $_->{cursor} } @{$result->{cursors}} ) {
+        # fake up a post-query cursor
+        my $cursor = MongoDB::Cursor->new(
+            started_iterating      => 1,              # we have the first batch
+            _client                => $db->_client,
+            _master                => $db->_client,   # fake this because we're already iterating
+            _ns                    => $c->{ns},
+            _query                 => \@command,
+            _is_parallel           => 1,
+        );
+
+        $cursor->_init( $c->{id} );
+        push @cursors, $cursor;
+    }
+
+    return @cursors;
+}
 
 sub rename {
     my ($self, $collectionname) = @_;
@@ -374,14 +410,9 @@ sub rename {
   
     my ($db, @collection_bits) = split(/\./, $fullname);
     my $collection = join('.', @collection_bits);
-    my $obj = $database->run_command([ 'renameCollection' => "$db.$collection", 'to' => "$db.$collectionname" ]);
+    my $obj = $database->_try_run_command([ 'renameCollection' => "$db.$collection", 'to' => "$db.$collectionname" ]);
 
-    if(ref($obj) eq "HASH"){
-      return $conn->get_database( $db )->get_collection( $collectionname );
-    }
-    else {
-      die $obj;
-    }
+    return $conn->get_database( $db )->get_collection( $collectionname );
 }
 
 
@@ -450,10 +481,13 @@ sub ensure_index {
         $obj->Push("name" => MongoDB::Collection::to_index_string($keys));
     }
 
-    foreach ("unique", "drop_dups", "background", "sparse") {
+    foreach ("unique", "background", "sparse") {
         if (exists $options->{$_}) {
             $obj->Push("$_" => ($options->{$_} ? boolean::true : boolean::false));
         }
+    }
+    if (exists $options->{drop_dups}) {
+        $obj->Push("dropDups" => ($options->{drop_dups} ? boolean::true : boolean::false));
     }
     $options->{'no_ids'} = 1;
 
@@ -545,26 +579,19 @@ sub count {
     $query ||= {};
 
     my $obj;
-    eval {
-        $obj = $self->_database->run_command([
+    try {
+        $obj = $self->_database->_try_run_command([
             count => $self->name,
             query => $query,
         ]);
+    }
+    catch {
+        # if there was an error, check if it was the "ns missing" one that means the
+        # collection hasn't been created or a real error.
+        die $_ unless /^ns missing/;
     };
 
-    # if there was an error, check if it was the "ns missing" one that means the
-    # collection hasn't been created or a real error.
-    if ($@) {
-        # if the request timed out, $obj might not be initialized
-        if ($obj && $obj =~ m/^ns missing/) {
-            return 0;
-        }
-        else {
-            die $@;
-        }
-    }
-
-    return $obj->{n};
+    return $obj ? $obj->{n} : 0;
 }
 
 
@@ -623,7 +650,7 @@ MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version v0.703.3
+version v0.703.4
 
 =head1 SYNOPSIS
 
@@ -829,6 +856,21 @@ query the result collection.
 
 See L<Aggregation|http://docs.mongodb.org/manual/aggregation/> in the MongoDB manual
 for more information on how to construct aggregation queries.
+
+=head2 parallel_scan($max_cursors)
+
+    my @cursors = $collection->parallel_scan(10);
+
+Scan the collection in parallel. The argument is the maximum number of
+L<MongoDB::Cursor> objects to return and must be a positive integer between 1
+and 10,000.
+
+As long as the collection is not modified during scanning, each document will
+appear only once in one of the cursors' result sets.
+
+Only iteration methods may be called on parallel scan cursors.
+
+If an error occurs, an exception will be thrown.
 
 =head2 rename ("newcollectionname")
 

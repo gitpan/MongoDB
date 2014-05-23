@@ -20,12 +20,15 @@ package MongoDB::Database;
 # ABSTRACT: A MongoDB Database
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
-use Moose;
+use MongoDB::CommandResult;
+use MongoDB::Error;
 use MongoDB::GridFS;
 use Carp 'carp';
 use boolean;
+use Moose;
+use namespace::clean -except => 'meta';
 
 has _client => ( 
     is       => 'ro',
@@ -105,9 +108,11 @@ sub _try_run_command {
     my ($self, $command) = @_;
     my $obj = $self->get_collection('$cmd')->find_one($command);
     return $obj if $obj->{ok};
-    confess $obj->{'errmsg'};
+    MongoDB::DatabaseError->throw(
+        message => $obj->{errmsg},
+        result => MongoDB::CommandResult->new(result => $obj),
+    );
 }
-
 
 sub eval {
     my ($self, $code, $args, $nolock) = @_;
@@ -136,13 +141,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 
@@ -205,7 +212,7 @@ Deletes the database.
 
 Finds out if the last database operation completed successfully.  If the last
 operation did not complete successfully, returns a hash reference of information
-about the error that occured.
+about the error that occurred.
 
 The optional C<$options> parameter is a hash reference that can contain any of
 the following:
@@ -301,7 +308,7 @@ C<w> servers.
 
 =item C<upserted>
 
-If an upsert occured, this field will contain the new record's C<_id> field. For
+If an upsert occurred, this field will contain the new record's C<_id> field. For
 upserts, either this field or C<updatedExisting> will be present (unless an
 error occurred).
 

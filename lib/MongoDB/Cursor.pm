@@ -20,11 +20,13 @@ package MongoDB::Cursor;
 # ABSTRACT: A cursor/iterator for Mongo query results
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
-use Moose;
+use MongoDB::Error;
 use boolean;
 use Tie::IxHash;
+use Moose;
+use namespace::clean -except => 'meta';
 
 #pod =head1 NAME
 #pod
@@ -40,8 +42,9 @@ use Tie::IxHash;
 #pod
 #pod =head2 Multithreading
 #pod
-#pod Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
-#pod will have to create their own database queries.
+#pod Cursors are cloned in threads, but not reset.  Iterating the same cursor from
+#pod multiple threads will give unpredictable results.  Only iterate from a single
+#pod thread.
 #pod
 #pod =head1 SEE ALSO
 #pod
@@ -83,7 +86,7 @@ $MongoDB::Cursor::timeout = 30000;
 #pod =head2 started_iterating
 #pod
 #pod If this cursor has queried the database yet. Methods
-#pod mofifying the query will complain if they are called
+#pod modifying the query will complain if they are called
 #pod after the database is queried.
 #pod
 #pod =cut
@@ -285,6 +288,13 @@ sub _do_query {
 
     my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit, $self->_query, $self->_fields);
     $self->_request_id($info->{'request_id'});
+
+    if ( length($query) > $self->_client->_max_bson_wire_size ) {
+        MongoDB::_CommandSizeError->throw(
+            message => "database command too large",
+            size => length $query,
+        );
+    }
 
     eval {
         $self->_client->send($query);
@@ -706,13 +716,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 
@@ -724,8 +736,9 @@ version v0.703.4
 
 =head2 Multithreading
 
-Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
-will have to create their own database queries.
+Cursors are cloned in threads, but not reset.  Iterating the same cursor from
+multiple threads will give unpredictable results.  Only iterate from a single
+thread.
 
 =head1 NAME
 
@@ -759,7 +772,7 @@ used.
 =head2 started_iterating
 
 If this cursor has queried the database yet. Methods
-mofifying the query will complain if they are called
+modifying the query will complain if they are called
 after the database is queried.
 
 =head2 immortal

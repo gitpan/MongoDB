@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 
-use v5.8.0;
+use 5.008;
 use strict;
 use warnings;
 
@@ -22,7 +22,11 @@ package MongoDB;
 # ABSTRACT: A MongoDB Driver for Perl
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
+
+# regexp_pattern was unavailable before 5.10, had to be exported to load the
+# function implementation on 5.10, and was automatically available in 5.10.1
+use if ($] eq '5.010000'), 're', 'regexp_pattern';
 
 use XSLoader;
 use MongoDB::Connection;
@@ -34,7 +38,7 @@ use MongoDB::OID;
 use MongoDB::Timestamp;
 use MongoDB::BSON::Binary;
 use MongoDB::BSON::Regexp;
-use MongoDB::Bulk;
+use MongoDB::BulkWrite;
 
 XSLoader::load(__PACKAGE__, $MongoDB::VERSION);
 
@@ -46,13 +50,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB - A MongoDB Driver for Perl
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 
@@ -177,59 +183,34 @@ developers most dependably via the MongoDB user list:
 I<mongodb-user@googlegroups.com>.  You might be able to get someone quicker
 through the MongoDB IRC channel, I<irc.freenode.net#mongodb>.
 
-=head1 FUNCTIONS
+=head1 FUNCTIONS (DEPRECATED)
 
-These functions should generally not be used.  They are very low level and have
-nice wrappers in L<MongoDB::Collection>.
+The following low-level functions are deprecated and will be removed in a
+future release.
 
-=head2 write_insert($ns, \@objs)
+=over 4
 
-    my ($insert, $ids) = MongoDB::write_insert("foo.bar", [{foo => 1}, {bar => -1}, {baz => 1}]);
+=item *
 
-Creates an insert string to be used by C<MongoDB::MongoClient::send>.  The second
-argument is an array of hashes to insert.  To imitate the behavior of
-C<MongoDB::Collection::insert>, pass a single hash, for example:
+write_insert
 
-    my ($insert, $ids) = MongoDB::write_insert("foo.bar", [{foo => 1}]);
+=item *
 
-Passing multiple hashes imitates the behavior of
-C<MongoDB::Collection::batch_insert>.
+write_query
 
-This function returns the string and an array of the the _id fields that the
-inserted hashes will contain.
+=item *
 
-=head2 write_query($ns, $flags, $skip, $limit, $query, $fields?)
+write_update
 
-    my ($query, $info) = MongoDB::write_query('foo.$cmd', 0, 0, -1, {getlasterror => 1});
+=item *
 
-Creates a database query to be used by C<MongoDB::MongoClient::send>.  C<$flags>
-are query flags to use (see C<MongoDB::Cursor::Flags> for possible values).
-C<$skip> is the number of results to skip, C<$limit> is the number of results to
-return, C<$query> is the query hash, and C<$fields> is the optional fields to
-return.
+write_remove
 
-This returns the query string and a hash of information about the query that is
-used by C<MongoDB::MongoClient::recv> to get the database response to the query.
+=item *
 
-=head2 write_update($ns, $criteria, $obj, $flags)
+read_documents
 
-    my ($update) = MongoDB::write_update("foo.bar", {age => {'$lt' => 20}}, {'$set' => {young => true}}, 0);
-
-Creates an update that can be used with C<MongoDB::MongoClient::send>.  C<$flags>
-can be 1 for upsert and/or 2 for updating multiple documents.
-
-=head2 write_remove($ns, $criteria, $flags)
-
-    my ($remove) = MongoDB::write_remove("foo.bar", {name => "joe"}, 0);
-
-Creates a remove that can be used with C<MongoDB::MongoClient::send>.  C<$flags>
-can be 1 for removing just one matching document.
-
-=head2 read_documents($buffer)
-
-  my @documents = MongoDB::read_documents($buffer);
-
-Decodes BSON documents from the given buffer.
+=back
 
 =head1 SEE ALSO
 

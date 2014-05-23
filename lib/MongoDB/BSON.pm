@@ -20,9 +20,10 @@ package MongoDB::BSON;
 # ABSTRACT: Tools for serializing and deserializing data in BSON form
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
 use Moose;
+use namespace::clean -except => 'meta';
 
 #pod =head1 NAME
 #pod
@@ -107,11 +108,15 @@ $MongoDB::BSON::use_boolean = 0;
 
 $MongoDB::BSON::use_binary = 0;
 
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 __END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -119,7 +124,7 @@ MongoDB::BSON - Tools for serializing and deserializing data in BSON form
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 NAME
 

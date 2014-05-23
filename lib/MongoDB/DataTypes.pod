@@ -22,21 +22,21 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB::DataTypes - The data types used with MongoDB
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 DESCRIPTION
 
 This goes over the types you can save to the database and use for queries in the
 Perl driver.  If you are using another language, please refer to that language's
 documentation (L<http://api.mongodb.org>).
-
-=encoding UTF-8
 
 =head1 NOTES FOR SQL PROGRAMMERS
 
@@ -327,7 +327,7 @@ booleans as L<boolean>s, set C<$MongoDB::BSON::use_boolean> to 1.
 
 "OID" stands for "Object ID", and is a unique id that is automatically added to
 documents if they do not already have an C<_id> field before they are saved to
-the database.  They are 12 bytes which are guarenteed to be unique.  Their
+the database.  They are 12 bytes which are guaranteed to be unique.  Their
 string form is a 24-character string of hexidecimal digits.
 
 To create a unique id:

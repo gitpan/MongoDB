@@ -2,9 +2,10 @@ package MongoDB::BSON::Regexp;
 # ABSTRACT: Regular expression type
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
 use Moose;
+use namespace::clean -except => 'meta';
 
 has pattern => ( 
     is       => 'ro',
@@ -43,6 +44,7 @@ sub BUILD {
     }
 }
 
+__PACKAGE__->meta->make_immutable;
 
 1;
 
@@ -50,13 +52,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB::BSON::Regexp - Regular expression type
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 AUTHORS
 

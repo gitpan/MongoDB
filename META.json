@@ -7,7 +7,7 @@
       "David Golden <david.golden@mongodb.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 5.015, CPAN::Meta::Converter version 2.140640",
+   "generated_by" : "Dist::Zilla version 5.019, CPAN::Meta::Converter version 2.140640",
    "license" : [
       "apache_2_0"
    ],
@@ -41,20 +41,27 @@
             "Carp" : "0",
             "Class::MOP::Class" : "0",
             "DateTime" : "0.78",
-            "Devel::Size" : "0",
             "Digest::MD5" : "0",
             "Encode" : "0",
+            "Exporter" : "5.57",
             "IO::File" : "0",
             "Moose" : "0",
+            "Moose::Meta::Class" : "0",
+            "Moose::Role" : "0",
             "Moose::Util::TypeConstraints" : "0",
+            "Safe::Isa" : "0",
             "Scalar::Util" : "0",
+            "Syntax::Keyword::Junction" : "0",
+            "Throwable" : "0",
             "Tie::IxHash" : "0",
             "Try::Tiny" : "0",
             "XSLoader" : "0",
             "boolean" : "0",
             "constant" : "0",
+            "if" : "0",
+            "namespace::clean" : "0",
             "overload" : "0",
-            "perl" : "v5.8.0",
+            "perl" : "5.008",
             "strict" : "0",
             "version" : "0",
             "warnings" : "0"
@@ -71,7 +78,6 @@
             "Data::Types" : "0",
             "DateTime::Tiny" : "0",
             "Devel::Peek" : "0",
-            "Exporter" : "0",
             "ExtUtils::MakeMaker" : "0",
             "File::Copy" : "0",
             "File::Path" : "0",
@@ -82,8 +88,10 @@
             "FileHandle" : "0",
             "JSON" : "0",
             "List::Util" : "0",
+            "Test::Deep" : "0",
             "Test::Exception" : "0",
-            "Test::More" : "0.88",
+            "Test::Fatal" : "0",
+            "Test::More" : "0.96",
             "Test::Warn" : "0",
             "bigint" : "0",
             "lib" : "0",
@@ -95,67 +103,91 @@
    "provides" : {
       "MongoDB" : {
          "file" : "lib/MongoDB.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::BSON" : {
          "file" : "lib/MongoDB/BSON.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::BSON::Binary" : {
          "file" : "lib/MongoDB/BSON/Binary.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::BSON::Regexp" : {
          "file" : "lib/MongoDB/BSON/Regexp.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
-      "MongoDB::Bulk" : {
-         "file" : "lib/MongoDB/Bulk.pm",
-         "version" : "v0.703.4"
+      "MongoDB::BulkWrite" : {
+         "file" : "lib/MongoDB/BulkWrite.pm",
+         "version" : "v0.703.5"
+      },
+      "MongoDB::BulkWriteView" : {
+         "file" : "lib/MongoDB/BulkWriteView.pm",
+         "version" : "v0.703.5"
       },
       "MongoDB::Code" : {
          "file" : "lib/MongoDB/Code.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::Collection" : {
          "file" : "lib/MongoDB/Collection.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
+      },
+      "MongoDB::CommandResult" : {
+         "file" : "lib/MongoDB/CommandResult.pm",
+         "version" : "v0.703.5"
       },
       "MongoDB::Connection" : {
          "file" : "lib/MongoDB/Connection.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::Cursor" : {
          "file" : "lib/MongoDB/Cursor.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::DBRef" : {
          "file" : "lib/MongoDB/DBRef.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::Database" : {
          "file" : "lib/MongoDB/Database.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
+      },
+      "MongoDB::DatabaseError" : {
+         "file" : "lib/MongoDB/Error.pm",
+         "version" : "v0.703.5"
+      },
+      "MongoDB::DocumentSizeError" : {
+         "file" : "lib/MongoDB/Error.pm",
+         "version" : "v0.703.5"
+      },
+      "MongoDB::Error" : {
+         "file" : "lib/MongoDB/Error.pm",
+         "version" : "v0.703.5"
       },
       "MongoDB::GridFS" : {
          "file" : "lib/MongoDB/GridFS.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::GridFS::File" : {
          "file" : "lib/MongoDB/GridFS/File.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::MongoClient" : {
          "file" : "lib/MongoDB/MongoClient.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::OID" : {
          "file" : "lib/MongoDB/OID.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
       },
       "MongoDB::Timestamp" : {
          "file" : "lib/MongoDB/Timestamp.pm",
-         "version" : "v0.703.4"
+         "version" : "v0.703.5"
+      },
+      "MongoDB::WriteResult" : {
+         "file" : "lib/MongoDB/WriteResult.pm",
+         "version" : "v0.703.5"
       }
    },
    "release_status" : "testing",
@@ -170,6 +202,6 @@
          "web" : "https://github.com/mongodb/mongo-perl-driver"
       }
    },
-   "version" : "v0.703.4"
+   "version" : "v0.703.5"
 }
 

@@ -20,11 +20,12 @@ package MongoDB::GridFS::File;
 # ABSTRACT: A Mongo GridFS file
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
-use Moose;
 use MongoDB::GridFS;
 use IO::File;
+use Moose;
+use namespace::clean -except => 'meta';
 
 #pod =head1 NAME
 #pod
@@ -151,11 +152,15 @@ sub slurp {
     return $bytes;
 }
 
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 __END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -163,7 +168,7 @@ MongoDB::GridFS::File - A Mongo GridFS file
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 

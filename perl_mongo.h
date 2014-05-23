@@ -26,6 +26,13 @@
 
 #include "ppport.h"
 
+/* not yet provided by ppport.h */
+#ifndef HeUTF8
+#define HeUTF8(he)  ((HeKLEN(he) == HEf_SVKEY) ? \
+                    SvUTF8(HeKEY_sv(he)) :       \
+                    (U32)HeKUTF8(he))
+#endif
+
 #define PERL_MONGO_CALL_BOOT(name)  perl_mongo_call_xs (aTHX_ name, cv, mark)
 
 /* whether to add an _id field */
@@ -153,6 +160,7 @@ SV *perl_mongo_call_reader (SV *self, const char *reader);
 SV *perl_mongo_call_method (SV *self, const char *method, I32 flags, int num, ...);
 SV *perl_mongo_call_function (const char *func, int num, ...);
 void perl_mongo_attach_ptr_to_instance (SV *self, void *ptr, MGVTBL *vtbl);
+void *perl_mongo_maybe_get_ptr_from_instance (SV *self, MGVTBL *vtbl);
 void *perl_mongo_get_ptr_from_instance (SV *self, MGVTBL *vtbl);
 SV *perl_mongo_construct_instance (const char *klass, ...);
 SV *perl_mongo_construct_instance_va (const char *klass, va_list ap);

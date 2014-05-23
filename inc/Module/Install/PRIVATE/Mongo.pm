@@ -1,4 +1,3 @@
-#line 1
 use strict;
 use warnings;
 
@@ -11,31 +10,19 @@ use Path::Tiny;
 use File::Spec::Functions qw/catdir/;
 use Cwd; 
 
-use vars qw{$VERSION @ISA};
-BEGIN {
-    $VERSION = '0.45';
-    @ISA     = qw{Module::Install::Base};
-}
+our @ISA = qw{Module::Install::Base};
 
 sub mongo {
     my ($self, @mongo_vars) = @_;
     my $ccflags = $self->makemaker_args->{CCFLAGS} || $Config{ccflags};
     $ccflags = "" unless defined $ccflags;
 
-    if ($Config{osname} eq 'darwin') {
-        my @arch = $Config::Config{ccflags} =~ m/-arch\s+(\S+)/g;
-        my $archStr = join '', map { " -arch $_ " } @arch;
-
-        $ccflags = $ccflags . $archStr;
-
-        $self->makemaker_args(
-            dynamic_lib => {
-                OTHERLDFLAGS => $archStr
-            }
-        );
-
-        $ccflags = $ccflags . ' -g -pipe -fno-common -DPERL_DARWIN -no-cpp-precomp -fno-strict-aliasing -Wdeclaration-after-statement -I/usr/local/include';
-        $self->makemaker_args( LDDLFLAGS => ' -bundle -undefined dynamic_lookup -L/usr/local/lib');
+    # openbsd needs threaded perl *or* single-threaded but with libpthread, so
+    # we check specifically for that
+    if ($^O eq 'openbsd') {
+        my $has_libpthread = qx{/usr/bin/ldd $Config{perlpath}} =~ /libpthread/;
+        die "OS unsupported: OpenBSD support requires a perl linked with libpthread"
+            unless $has_libpthread;
     }
 
     # check for 64-bit
@@ -54,7 +41,7 @@ sub mongo {
 
     my $conf = $self->configure_bson;
 
-    if ($conf->{BSON_WITH_OID32_PT} || $conf->{BSON_WITH_OID32_PT}) {
+    if ($conf->{BSON_WITH_OID32_PT} || $conf->{BSON_WITH_OID64_PT}) {
         my $pthread = $^O eq 'solaris' ? " -pthreads " : " -pthread ";
         $ccflags .= $pthread;
         my $ldflags = $self->makemaker_args->{LDFLAGS};
@@ -114,7 +101,7 @@ sub configure_bson {
 
     my $conf = $self->probe_bson_config;
 
-    path("bson/bson-stdint.h")->spew("#include <$conf->{STDINT_SOURCE}>");
+    path("bson/bson-stdint.h")->spew("#include <$conf->{STDINT_SOURCE}>\n");
 
     my $config_guts = path("bson/bson-config.h.in")->slurp;
     for my $key ( %$conf ) {

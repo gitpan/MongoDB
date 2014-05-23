@@ -50,6 +50,12 @@ static void sasl_authenticate( SV *client, mongo_link *link ) {
   int rc;
   char out_buf[8192];
 
+  /* check that we are connected before attempting a SASL conversation;
+     otherwise we will end up in an infinite loop */
+  if ( ! link->master->connected ) { 
+    croak( "MongoDB: Could not begin SASL authentication without connection." );
+  }
+
   mechanism = perl_mongo_call_method( client, "sasl_mechanism", 0, 0 );
   if ( !SvOK( mechanism ) ) { 
     croak( "MongoDB: Could not retrieve SASL mechanism from client object\n" );
@@ -57,7 +63,8 @@ static void sasl_authenticate( SV *client, mongo_link *link ) {
 
   if ( strncmp( "PLAIN", SvPV_nolen( mechanism ), 5 ) == 0 ) { 
     /* SASL PLAIN does not require a libgsasl conversation loop, so we can handle it elsewhere */
-    return perl_mongo_call_method( client, "_sasl_plain_authenticate", 0, 0 );
+    perl_mongo_call_method( client, "_sasl_plain_authenticate", 0, 0 );
+    return;
   }
 
   if ( ( rc = gsasl_init( &ctx ) ) != GSASL_OK ) { 
@@ -143,7 +150,7 @@ void perl_mongo_connect(SV *client, mongo_link* link) {
 
   SV* sasl_flag = perl_mongo_call_method( client, "sasl", 0, 0 );
 
-  if ( SvIV(sasl_flag) == 1 ) { 
+  if ( link->master->connected && SvIV(sasl_flag) == 1 ) {
 #ifdef MONGO_SASL
       sasl_authenticate( client, link );
 #else
@@ -197,6 +204,11 @@ void non_ssl_connect(mongo_link* link) {
 
   // get addresses
   if (!mongo_link_sockaddr(&addr, link->master->host, link->master->port)) {
+#ifdef WIN32
+    closesocket(link->master->socket);
+#else
+    close(sock);
+#endif
     return;
   }
 
@@ -224,10 +236,20 @@ void non_ssl_connect(mongo_link* link) {
     if (errno != EINPROGRESS)
 #endif
     {
+#ifdef WIN32
+        closesocket(link->master->socket);
+#else
+        close(sock);
+#endif
       return;
     }
 
     if (!mongo_link_timeout(sock, link->timeout)) {
+#ifdef WIN32
+        closesocket(link->master->socket);
+#else
+        close(sock);
+#endif
       return;
     }
 
@@ -235,6 +257,11 @@ void non_ssl_connect(mongo_link* link) {
 
     connected = getpeername(sock, (struct sockaddr*)&addr, &size);
     if (connected == -1){
+#ifdef WIN32
+        closesocket(link->master->socket);
+#else
+        close(sock);
+#endif
       return;
     }
   }
@@ -318,8 +345,8 @@ static int mongo_link_timeout(int sock, time_t to) {
     return 1;
   }
 
-  timeout.tv_sec = to > 0 ? ((long)to / 1000) : 20;
-  timeout.tv_usec = to > 0 ? ((to % 1000) * 1000) : 0;
+  timeout.tv_sec = (long)to / 1000;
+  timeout.tv_usec = (to % 1000) * 1000;
 
   // initialize prev, in case we get interrupted
   if (gettimeofday(&prev, 0) == -1) {
@@ -645,6 +672,8 @@ void set_disconnected(SV *link_sv) {
 #ifdef WIN32
   shutdown(link->master->socket, 2);
   closesocket(link->master->socket);
+  /* this might be a bug -- we should defer this to program exit or get the Perl
+   * interpreter to do it */
   WSACleanup();
 #else
   close(link->master->socket);

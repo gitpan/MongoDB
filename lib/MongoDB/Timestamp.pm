@@ -20,7 +20,7 @@ package MongoDB::Timestamp;
 # ABSTRACT: Replication timestamp
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
 #pod =head1 NAME
 #pod
@@ -36,6 +36,7 @@ our $VERSION = 'v0.703.4'; # TRIAL
 #pod =cut
 
 use Moose;
+use namespace::clean -except => 'meta';
 
 #pod =head1 ATTRIBUTES
 #pod
@@ -63,11 +64,15 @@ has inc => (
     required => 1,
 );
 
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 __END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -75,7 +80,7 @@ MongoDB::Timestamp - Replication timestamp
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 

@@ -1,5 +1,5 @@
 #
-#  Copyright 2009-2013 MongoDB, Inc.
+#  Copyright 2014 MongoDB, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -14,48 +14,43 @@
 #  limitations under the License.
 #
 
-package MongoDB::Code;
+package MongoDB::CommandResult;
 
-
-# ABSTRACT: JavaScript Code
+# ABSTRACT: MongoDB generic command result document
 
 use version;
 our $VERSION = 'v0.703.5'; # TRIAL
 
-#pod =head1 NAME
-#pod
-#pod MongoDB::Code - JavaScript code
-#pod
-#pod =cut
-
 use Moose;
 use namespace::clean -except => 'meta';
 
-#pod =head1 ATTRIBUTES
+with 'MongoDB::Role::_LastError';
+
+#pod =attr result
 #pod
-#pod =head2 code
-#pod
-#pod A string of JavaScript code.
+#pod Hash reference with the result of a database command
 #pod
 #pod =cut
 
-has code => (
+has result => (
     is       => 'ro',
-    isa      => 'Str',
+    isa      => 'HashRef',
     required => 1,
 );
 
-#pod =head2 scope
+#pod =method last_errmsg
 #pod
-#pod An optional hash of variables to pass as the scope.
+#pod Error string (if any) or the empty string if there was no error.
 #pod
 #pod =cut
 
-has scope => (
-    is       => 'ro',
-    isa      => 'HashRef',
-    required => 0,
-);
+sub last_errmsg {
+    my ($self) = @_;
+    for my $err_key (qw/$err err errmsg/) {
+        return $self->result->{$err_key} if exists $self->result->{$err_key};
+    }
+    return "";
+}
 
 __PACKAGE__->meta->make_immutable;
 
@@ -69,25 +64,28 @@ __END__
 
 =head1 NAME
 
-MongoDB::Code - JavaScript Code
+MongoDB::CommandResult - MongoDB generic command result document
 
 =head1 VERSION
 
 version v0.703.5
 
-=head1 NAME
+=head1 DESCRIPTION
 
-MongoDB::Code - JavaScript code
+This class encapsulates the results from a database command.  Currently, it is only
+available from the C<result> attribute of C<MongoDB::DatabaseError>.
 
 =head1 ATTRIBUTES
 
-=head2 code
+=head2 result
 
-A string of JavaScript code.
+Hash reference with the result of a database command
 
-=head2 scope
+=head1 METHODS
 
-An optional hash of variables to pass as the scope.
+=head2 last_errmsg
+
+Error string (if any) or the empty string if there was no error.
 
 =head1 AUTHORS
 

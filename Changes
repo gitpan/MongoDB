@@ -1,4 +1,73 @@
-Change history for the MongoDB Perl driver:
+# Change history for the MongoDB Perl driver:
+
+v0.703.5  2014-05-23 06:26:46-04:00 America/New_York (TRIAL RELEASE)
+
+  [Enhancements]
+
+  - PERL-299 Bulk API fully implemented (but not yet fully documented)
+
+  [Bug Fixes]
+
+  - PERL-305 fixed infinite loop connecting with SASL to a down server
+
+  - PERL-323 fixed possible socket leaks on communication errors
+
+  - PERL-336 fixed index creation legacy fallback against older mongos
+
+  - Fixed clock race in OID unit test
+
+  - Fixed memory corruption error on Perl 5.19.1+
+
+  - Fixed fatal error in DESTROY with find_master and down server
+
+  - Fixed use of re::regexp_pattern for 5.10.0
+
+  - Provided backwards compatible HeUTF8 macro for Perl v5.10 and v5.8.8
+    and earlier
+
+  - Fixed bson library configuration and ifdef bugs
+
+  - Fixed a bug that would serialize an index direction as a string on
+    some older Perls
+
+  - Update ppport.h to version 3.22
+
+  - Fixed several compiler warnings on Perl 5.8
+
+  - Removed hard-coded compiler flags for Darwin
+
+  - Cleaned Moose class namespaces of imported methods
+
+  [Deprecations]
+
+  - PERL-320 low-level protocol functions in MongoDB.pm are deprecated
+
+  [Documentation]
+
+  - PERL-317 Clarified support for threads
+
+  - PERL-341 Added install documentation including use of non-standard C
+    library paths
+
+  [Prerequisites]
+
+  - Added namespace::clean
+
+  - Added Test::Deep
+
+  - Added Test::Fatal
+
+  - Added Throwable
+
+  - Added Syntax::Keyword::Junction
+
+  - Changed Test::More requirement to 0.96
+
+  - Removed Devel::Size
+
+  [Known Issues]
+
+  - PERL-233 SSL certificate validation not yet implemented
 
 v0.703.4  2014-04-07 20:12:27-04:00 America/New_York (TRIAL RELEASE)
 
@@ -82,6 +151,8 @@ v0.703.3  2014-04-01 10:32:49-04:00 America/New_York (TRIAL RELEASE)
 
   [Bug Fixes]
 
+  - PERL-233 Fix find_and_modify error handling
+
   - PERL-260 ensure_index no longer ignores weights, default_language, and
     language_override options
 
@@ -92,8 +163,6 @@ v0.703.3  2014-04-01 10:32:49-04:00 America/New_York (TRIAL RELEASE)
   - Fix failing t/gridfs.t
 
   - Cache client constructor arguments for replica set connections
-
-  - Fix find_and_modify error handling
 
   - Prevent GridFS MD5 calculation when 'safe' is not set (mapbuh)
 

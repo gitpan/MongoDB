@@ -217,6 +217,18 @@ perl_mongo_attach_ptr_to_instance (SV *self, void *ptr, MGVTBL *vtbl)
 void *
 perl_mongo_get_ptr_from_instance (SV *self, MGVTBL *vtbl)
 {
+  void *p = perl_mongo_maybe_get_ptr_from_instance(self, vtbl);
+
+  if ( ! p ) {
+    croak ("invalid object");
+  }
+
+  return p;
+}
+
+void *
+perl_mongo_maybe_get_ptr_from_instance (SV *self, MGVTBL *vtbl)
+{
   MAGIC *mg;
 
   if (!self || !SvOK (self) || !SvROK (self) || !sv_isobject (self)) {
@@ -228,7 +240,7 @@ perl_mongo_get_ptr_from_instance (SV *self, MGVTBL *vtbl)
       return mg->mg_ptr;
   }
 
-  croak ("invalid object");
+  return NULL;
 }
 
 SV *
@@ -364,7 +376,7 @@ elem_to_sv (const bson_iter_t * iter, char *dt_type, int inflate_dbrefs, int inf
     break;
   }
   case BSON_TYPE_BINARY: {
-    const char * const buf;
+    const char * buf;
     uint32_t len;
     bson_subtype_t type;
     bson_iter_binary(iter, &type, &len, (const uint8_t **)&buf);
@@ -876,7 +888,7 @@ hv_to_bson (bson_t * bson, SV *sv, AV *ids, stackette *stack, int is_insert)
       croak("could not find hash value for key %s, len:%lu", key, len);
     }
     if (!utf8) {
-      key = (const char *) bytes_to_utf8((const U8 *)key, &len);
+      key = (const char *) bytes_to_utf8((U8 *)key, &len);
     }
     append_sv (bson, key, *hval, stack, is_insert);
     if (!utf8) {
@@ -1515,6 +1527,8 @@ void perl_mongo_sv_to_buffer(buffer * buf, SV *sv, AV *ids)
 
 void
 perl_mongo_sv_to_bson (bson_t * bson, SV *sv, AV *ids) {
+  int is_insert = ids != NO_PREP;
+
   if (!SvROK (sv)) {
     croak ("not a reference");
   }
@@ -1524,11 +1538,11 @@ perl_mongo_sv_to_bson (bson_t * bson, SV *sv, AV *ids) {
 
   switch (SvTYPE (SvRV (sv))) {
   case SVt_PVHV:
-    hv_to_bson (bson, sv, ids, EMPTY_STACK, ids != 0);
+    hv_to_bson (bson, sv, ids, EMPTY_STACK, is_insert);
     break;
   case SVt_PVAV: {
     if (sv_isa(sv, "Tie::IxHash")) {
-      ixhash_to_bson(bson, sv, ids, EMPTY_STACK, ids != 0);
+      ixhash_to_bson(bson, sv, ids, EMPTY_STACK, is_insert);
     }
     else {
       /*
@@ -1558,7 +1572,7 @@ perl_mongo_sv_to_bson (bson_t * bson, SV *sv, AV *ids) {
           if (strcmp(SvPV_nolen(*key), "_id") == 0) {
             SV **val = av_fetch(av, i+1, 0);
             has_id = 1;
-            append_sv(bson, "_id", *val, EMPTY_STACK, ids != 0);
+            append_sv(bson, "_id", *val, EMPTY_STACK, is_insert);
             SvREFCNT_inc(*val);
             av_push(ids, *val);
             break;
@@ -1580,7 +1594,7 @@ perl_mongo_sv_to_bson (bson_t * bson, SV *sv, AV *ids) {
 
         str = SvPVutf8(*key, len);
 
-        append_sv (bson, str, *val, EMPTY_STACK, ids != 0);
+        append_sv (bson, str, *val, EMPTY_STACK, is_insert);
       }
     }
     break;

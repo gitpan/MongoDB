@@ -19,25 +19,13 @@ package MongoDB::DBRef;
 # ABSTRACT: Native DBRef support
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
-use Moose;
-use Moose::Util::TypeConstraints;
 use Carp 'croak';
 use Tie::IxHash;
-
-
-subtype DBRefColl => as 'Str';
-subtype DBRefDB   => as 'Str';
-
-coerce 'DBRefColl'
-  => from 'MongoDB::Collection'
-  => via  { $_->name };
-
-coerce 'DBRefDB' 
-  => from 'MongoDB::Database'
-  => via  { $_->name };
-
+use Moose;
+use MongoDB::_Types;
+use namespace::clean -except => 'meta';
 
 # no type constraint since an _id can be anything
 has id => (
@@ -113,11 +101,15 @@ sub _ordered {
     return Tie::IxHash->new( '$ref' => $self->ref, '$id' => $self->id, '$db' => $self->db );
 }
 
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 __END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -125,7 +117,7 @@ MongoDB::DBRef - Native DBRef support
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 

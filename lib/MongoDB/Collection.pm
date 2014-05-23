@@ -20,14 +20,14 @@ package MongoDB::Collection;
 # ABSTRACT: A MongoDB Collection
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
 use Tie::IxHash;
-use Moose;
 use Carp 'carp';
 use boolean;
-use Devel::Size 'total_size';
 use Try::Tiny;
+use Moose;
+use namespace::clean -except => 'meta';
 
 has _database => (
     is       => 'ro',
@@ -183,24 +183,6 @@ sub find_one {
     return $self->find($query)->limit(-1)->fields($fields)->next;
 }
 
-sub _split_batch { 
-    my ( $self, $docs ) = @_;
-
-    # this will give us a rather inflated size as compared to the BSON
-    # serialized version of the structure, so we'll use it as a rather
-    # liberal estimate of when to split the batch.
-    my $size = total_size $docs;
-    return $docs if $size < 16_777_216;
-
-    my ( @left, @right );
-    @left  = @{$docs}[ 0                     .. int( @$docs / 2 ) - 1];
-    @right = @{$docs}[ int( @$docs / 2 )     .. $#$docs               ]; 
-
-    return ( total_size \@left  < 16_777_216 ? \@left  : $self->_split_batch( \@left ),
-             total_size \@right < 16_777_216 ? \@right : $self->_split_batch( \@right ) );
-}
-
-
 sub insert { 
     my $self = shift;
     my ( $object, $options ) = @_;
@@ -264,7 +246,7 @@ sub legacy_update {
     # now there are two, there will probably be
     # more in the future.  So, to support old code,
     # passing "1" will still be supported, but not
-    # documentd, so we can phase that out eventually.
+    # documented, so we can phase that out eventually.
     #
     # The preferred way of passing options will be a
     # hash of {optname=>value, ...}
@@ -467,7 +449,7 @@ sub ensure_index {
     if (($options && ref $options ne 'HASH') ||
         (ref $keys eq 'ARRAY' &&
          ($#$keys == 0 || $#$keys >= 1 && !($keys->[1] =~ /-?1/))) ||
-        (ref $keys eq 'Tie::IxHash' && $keys->[2][0] =~ /(de|a)scending/)) {
+        (ref $keys eq 'Tie::IxHash' && (my $copy = $keys->[2][0]) =~ /(de|a)scending/)) {
         Carp::croak("you're using the old ensure_index format, please upgrade");
     }
 
@@ -512,7 +494,7 @@ sub ensure_index {
     return $res if $res->{ok};    
 
     if ( ( not $res->{ok} )  && 
-         ( not exists $res->{code} or $res->{code} == 59 ) ) { 
+         ( not exists $res->{code} or $res->{code} == 59 or $res->{code} == 13390) ) { 
         $obj->Unshift( ns => $tmp_ns );     # restore ns to spec
         my $indexes = $self->_database->get_collection("system.indexes");
         return $indexes->insert($obj, $options);
@@ -524,10 +506,26 @@ sub ensure_index {
 
 sub _make_safe {
     my ($self, $req) = @_;
+
+    my $ok = $self->_make_safe_cursor($req)->next();
+
+    # $ok->{ok} is 1 if err is set
+    Carp::croak $ok->{err} if $ok->{err};
+    # $ok->{ok} == 0 is still an error
+    if (!$ok->{ok}) {
+        Carp::croak $ok->{errmsg};
+    }
+
+    return $ok;
+}
+
+sub _make_safe_cursor {
+    my ($self, $req, $write_concern) = @_;
     my $conn = $self->_database->_client;
     my $db = $self->_database->name;
+    $write_concern ||= $conn->_write_concern;
 
-    my $last_error = Tie::IxHash->new(getlasterror => 1, w => $conn->w, wtimeout => $conn->wtimeout, j => $conn->j);
+    my $last_error = Tie::IxHash->new(getlasterror => 1, %$write_concern);
     my ($query, $info) = MongoDB::write_query($db.'.$cmd', 0, 0, -1, $last_error);
 
     $conn->send("$req$query");
@@ -541,17 +539,7 @@ sub _make_safe {
 
     $conn->recv($cursor);
     $cursor->started_iterating(1);
-
-    my $ok = $cursor->next();
-
-    # $ok->{ok} is 1 if err is set
-    Carp::croak $ok->{err} if $ok->{err};
-    # $ok->{ok} == 0 is still an error
-    if (!$ok->{ok}) {
-        Carp::croak $ok->{errmsg};
-    }
-
-    return $ok;
+    return $cursor;
 }
 
 sub save {
@@ -630,19 +618,30 @@ sub drop {
     return;
 }
 
-sub bulk { 
-    my ( $self, %args ) = @_;
+sub initialize_unordered_bulk_op {
+    my ($self) = @_;
+    return MongoDB::BulkWrite->new( collection => $self, ordered => 0 );
+}
 
-    return MongoDB::Bulk->new( %args, collection => $self );
+sub initialize_ordered_bulk_op {
+    my ($self) = @_;
+    return MongoDB::BulkWrite->new( collection => $self, ordered => 1 );
+}
+
+{
+    # shorter aliases for bulk op constructors
+    no warnings 'once';
+    *ordered_bulk = \&initialize_ordered_bulk_op;
+    *unordered_bulk = \&initialize_unordered_bulk_op;
 }
 
 __PACKAGE__->meta->make_immutable;
 
 1;
 
-__END__
-
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -650,7 +649,7 @@ MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 
@@ -1043,3 +1042,8 @@ This is free software, licensed under:
   The Apache License, Version 2.0, January 2004
 
 =cut
+
+__END__
+
+
+# vim: ts=4 sts=4 sw=4 et:

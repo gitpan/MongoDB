@@ -5,8 +5,9 @@ use inc::Module::Install;
 name 'MongoDB';
 perl_version '5.8.4';
 author 'Florian Ragwitz <rafl@debian.org>';
-author 'Kristina Chodorow <kristina@10gen.com>';
-author 'Mike Friedman <mike.friedman@10gen.com>';
+author 'Kristina Chodorow <kristina@mongodb.com>';
+author 'Mike Friedman <mike.friedman@mongodb.com>';
+author 'David.Golden <david.golden@mongodb.com>';
 license 'Apache';
 all_from 'lib/MongoDB.pm';
 
@@ -29,16 +30,19 @@ cc_optimize_flags( @cc_optimize_flags ) if @cc_optimize_flags;
 requires 'Carp';
 requires 'Class::MOP::Class';
 requires 'DateTime' => '0.78';
-requires 'Devel::Size';
 requires 'Digest::MD5';
 requires 'Encode';
 requires 'IO::File';
 requires 'Moose' => '2';
 requires 'Moose::Util::TypeConstraints' => '2';
+requires 'Safe::Isa';
+requires 'Syntax::Keyword::Junction';
 requires 'Scalar::Util';
+requires 'Throwable';
 requires 'Tie::IxHash';
 requires 'Try::Tiny';
 requires 'boolean';
+requires 'namespace::clean';
 requires 'version';
 
 test_requires 'Data::Dump';
@@ -53,8 +57,10 @@ test_requires 'File::Spec';
 test_requires 'File::Temp' => '0.17';
 test_requires 'FileHandle';
 test_requires 'JSON' => '2';
+test_requires 'Test::Deep';
 test_requires 'Test::Exception';
-test_requires 'Test::More';
+test_requires 'Test::Fatal';
+test_requires 'Test::More' => 0.96;
 test_requires 'Test::Warn';
 test_requires 'bigint';
 
@@ -70,7 +76,6 @@ if ($Config::Config{useithreads}) {
 WriteAll;
 
 package MY;
-our $VERSION = '0.45';
 
 use Config;
 

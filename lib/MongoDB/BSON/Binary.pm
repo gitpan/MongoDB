@@ -20,9 +20,10 @@ package MongoDB::BSON::Binary;
 # ABSTRACT: Binary type
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
+our $VERSION = 'v0.703.5'; # TRIAL
 
 use Moose;
+use namespace::clean -except => 'meta';
 
 #pod =head1 NAME
 #pod
@@ -138,11 +139,15 @@ has subtype => (
 #pod
 #pod =cut
 
+__PACKAGE__->meta->make_immutable;
+
 1;
 
 __END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -150,7 +155,7 @@ MongoDB::BSON::Binary - Binary type
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 SYNOPSIS
 

@@ -22,13 +22,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB::Tutorial - Getting started with MongoDB
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 DESCRIPTION
 

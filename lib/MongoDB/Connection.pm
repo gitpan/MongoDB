@@ -19,9 +19,7 @@ package MongoDB::Connection;
 # ABSTRACT: A connection to a MongoDB server (DEPRECATED)
 
 use version;
-our $VERSION = 'v0.703.4'; # TRIAL
-
-use Moose;
+our $VERSION = 'v0.703.5'; # TRIAL
 
 use MongoDB;
 use MongoDB::Cursor;
@@ -32,7 +30,8 @@ use Digest::MD5;
 use Tie::IxHash;
 use Carp 'carp';
 use boolean;
-
+use Moose;
+use namespace::clean -except => 'meta';
 
 has '_client' => (
     isa         => 'MongoDB::MongoClient', 
@@ -48,8 +47,6 @@ around 'new' => sub {
     return $self->$orig( _client => MongoDB::MongoClient->new( @args ) );
 };
 
-
-
 __PACKAGE__->meta->make_immutable ( inline_destructor => 0, inline_constructor => 0 );
 
 1;
@@ -58,13 +55,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 MongoDB::Connection - A connection to a MongoDB server (DEPRECATED)
 
 =head1 VERSION
 
-version v0.703.4
+version v0.703.5
 
 =head1 DEPRECATED
 
@@ -86,11 +85,6 @@ It can connect to a database server running anywhere, though:
     my $connection = MongoDB::Connection->new(host => 'example.com:12345');
 
 See the L</"host"> section for more options for connecting to MongoDB.
-
-=head2 MULTITHREADING
-
-Cloning instances of this class is disabled in Perl 5.8.7+, so forked threads
-will have to create their own connections to the database.
 
 =head1 SEE ALSO
 
@@ -169,10 +163,10 @@ safe insert times out and croaks.
 I<MongoDB server version 2.0+: "majority" and Data Center Awareness>
 
 As of MongoDB 2.0+, the 'w' parameter can be passed strings. This can be done by passing it the string "majority" this will wait till the B<majority> of 
-of the nodes in the replica set have recieved the data. For more information see: http://www.mongodb.org/display/DOCS/getLastError+Command#getLastErrorCommand-majority
+of the nodes in the replica set have received the data. For more information see: http://www.mongodb.org/display/DOCS/getLastError+Command#getLastErrorCommand-majority
 
 This can be useful for "Data Center Awareness." In v2.0+, you can "tag" replica members. With "tagging" you can specify a new "getLastErrorMode" where you can create new
-rules on how your data is replicated. To used you getLastErrorMode, you pass in the name of the mode to the 'w' parameter. For more infomation see: http://www.mongodb.org/display/DOCS/Data+Center+Awareness
+rules on how your data is replicated. To used you getLastErrorMode, you pass in the name of the mode to the 'w' parameter. For more information see: http://www.mongodb.org/display/DOCS/Data+Center+Awareness
 
 =head2 wtimeout
 

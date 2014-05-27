@@ -20,7 +20,7 @@ package MongoDB::Collection;
 # ABSTRACT: A MongoDB Collection
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use Tie::IxHash;
 use Carp 'carp';
@@ -649,7 +649,7 @@ MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 SYNOPSIS
 
@@ -1017,11 +1017,7 @@ Deletes a collection as well as all of its indexes.
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -1029,7 +1025,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

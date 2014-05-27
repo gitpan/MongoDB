@@ -22,7 +22,7 @@ package MongoDB::Error;
 # ABSTRACT: MongoDB Driver Error classes
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use Moose;
 use MongoDB::_Types;
@@ -143,7 +143,7 @@ MongoDB::Error - MongoDB Driver Error classes
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 SYNOPSIS
 
@@ -233,11 +233,7 @@ document — the document that caused the error
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -245,7 +241,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

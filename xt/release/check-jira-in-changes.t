@@ -8,18 +8,7 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
-73e4f9c PERL-320 deprecate low-level MongoDB.pm functions
-a763566 add Changes entry for PERL-341
-8fd59bf PERL-317 clarify documetation about thread support
-a409b0e PERL-341 add installation instructions document
-646df0d revert incomplete work on PERL-233
-6eb1473 Merge branch 'PERL-299-bulk-API'
-35f2026 PERL-336 createIndexes fix for additional error code
-95a1dbd PERL-323 add windows-specific socket close on error conditions
-c289b3c PERL-323 fix socket leaks
-acedb93 PERL-233 re-merging forgotten commit for SSL cert validation
-4d3e607 PERL-233 merging in SSL cert validation code to master
-54e1100 PERL-305 check for connection before attempting SASL auth
+9c15958 PERL-349 mark thread join test under find_master as TODO
 
 EOC
 
@@ -33,7 +22,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.703.5(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.704.0.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;

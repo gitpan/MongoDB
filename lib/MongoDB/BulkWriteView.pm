@@ -19,7 +19,7 @@ package MongoDB::BulkWriteView;
 # ABSTRACT: Bulk write operations against a query document
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use Moose;
 use namespace::clean -except => 'meta';
@@ -51,7 +51,7 @@ MongoDB::BulkWriteView - Bulk write operations against a query document
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 SYNOPSIS
 
@@ -146,11 +146,7 @@ update, update_one or replace_one operation as an upsert operation.
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -158,7 +154,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

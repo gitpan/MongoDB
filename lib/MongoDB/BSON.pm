@@ -20,7 +20,7 @@ package MongoDB::BSON;
 # ABSTRACT: Tools for serializing and deserializing data in BSON form
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use Moose;
 use namespace::clean -except => 'meta';
@@ -124,7 +124,7 @@ MongoDB::BSON - Tools for serializing and deserializing data in BSON form
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 NAME
 
@@ -195,11 +195,7 @@ you would like to have it deserialized as instances of L<MongoDB::BSON::Binary>
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -207,7 +203,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

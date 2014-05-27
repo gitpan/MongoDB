@@ -19,7 +19,7 @@ package MongoDB::WriteResult;
 # ABSTRACT: MongoDB write result document
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use Moose;
 use MongoDB::_Types;
@@ -229,7 +229,7 @@ MongoDB::WriteResult - MongoDB write result document
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 SYNOPSIS
 
@@ -363,11 +363,7 @@ C<writeConcernErrors> or the empty string if there are no errors.
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -375,7 +371,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

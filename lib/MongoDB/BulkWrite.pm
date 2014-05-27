@@ -19,7 +19,7 @@ package MongoDB::BulkWrite;
 # ABSTRACT: MongoDB bulk write interface
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use MongoDB::Error;
 use MongoDB::OID;
@@ -680,7 +680,7 @@ MongoDB::BulkWrite - MongoDB bulk write interface
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 SYNOPSIS
 
@@ -832,11 +832,7 @@ to call C<execute> more than once on the same bulk object.
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -844,7 +840,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

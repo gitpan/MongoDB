@@ -19,7 +19,7 @@ package MongoDB::MongoClient;
 # ABSTRACT: A connection to a MongoDB server
 
 use version;
-our $VERSION = 'v0.703.5'; # TRIAL
+our $VERSION = 'v0.704.0.0';
 
 use MongoDB;
 use MongoDB::Cursor;
@@ -927,14 +927,26 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 SYNOPSIS
 
-The MongoDB::MongoClient class creates a client connection to the MongoDB server.
+    use strict;
+    use warnings;
+    use MongoDB;
+
+    # connects to localhost:27017
+    my $client = MongoDB::MongoClient->new;
+
+    my $db = $client->get_database("test");
+
+=head1 DESCRIPTION
+
+The C<MongoDB::MongoClient> class creates a client connection to one or
+more MongoDB servers.
 
 By default, it connects to a single server running on the local machine
-listening on the default port:
+listening on the default port 27017:
 
     # connects to localhost:27017
     my $client = MongoDB::MongoClient->new;
@@ -944,6 +956,18 @@ It can connect to a database server running anywhere, though:
     my $client = MongoDB::MongoClient->new(host => 'example.com:12345');
 
 See the L</"host"> section for more options for connecting to MongoDB.
+
+MongoDB can be started in I<authentication mode>, which requires clients to log in
+before manipulating data.  By default, MongoDB does not start in this mode, so no
+username or password is required to make a fully functional connection.  If you
+would like to learn more about authentication, see the C<authenticate> method.
+
+Connecting is relatively expensive, so try not to open superfluous connections.
+
+There is no way to explicitly disconnect from the database.  However, the
+connection will automatically be closed and cleaned up when no references to
+the C<MongoDB::MongoClient> object exist, which occurs when C<$client> goes out of
+scope (or earlier if you undefine it with C<undef>).
 
 =head1 ATTRIBUTES
 
@@ -1323,11 +1347,7 @@ Core documentation on connections: L<http://docs.mongodb.org/manual/reference/co
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -1335,7 +1355,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

@@ -1,13 +1,13 @@
 {
-   "abstract" : "A MongoDB Driver for Perl",
+   "abstract" : "Official MongoDB Driver for Perl",
    "author" : [
-      "Florian Ragwitz <rafl@debian.org>",
-      "Kristina Chodorow <kristina@mongodb.org>",
+      "David Golden <david.golden@mongodb.org>",
       "Mike Friedman <friedo@mongodb.com>",
-      "David Golden <david.golden@mongodb.org>"
+      "Kristina Chodorow <kristina@mongodb.org>",
+      "Florian Ragwitz <rafl@debian.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 5.019, CPAN::Meta::Converter version 2.140640",
+   "generated_by" : "Dist::Zilla version 5.019, CPAN::Meta::Converter version 2.141170",
    "license" : [
       "apache_2_0"
    ],
@@ -103,94 +103,94 @@
    "provides" : {
       "MongoDB" : {
          "file" : "lib/MongoDB.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::BSON" : {
          "file" : "lib/MongoDB/BSON.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::BSON::Binary" : {
          "file" : "lib/MongoDB/BSON/Binary.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::BSON::Regexp" : {
          "file" : "lib/MongoDB/BSON/Regexp.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::BulkWrite" : {
          "file" : "lib/MongoDB/BulkWrite.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::BulkWriteView" : {
          "file" : "lib/MongoDB/BulkWriteView.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Code" : {
          "file" : "lib/MongoDB/Code.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Collection" : {
          "file" : "lib/MongoDB/Collection.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::CommandResult" : {
          "file" : "lib/MongoDB/CommandResult.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Connection" : {
          "file" : "lib/MongoDB/Connection.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Cursor" : {
          "file" : "lib/MongoDB/Cursor.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::DBRef" : {
          "file" : "lib/MongoDB/DBRef.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Database" : {
          "file" : "lib/MongoDB/Database.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::DatabaseError" : {
          "file" : "lib/MongoDB/Error.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::DocumentSizeError" : {
          "file" : "lib/MongoDB/Error.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Error" : {
          "file" : "lib/MongoDB/Error.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::GridFS" : {
          "file" : "lib/MongoDB/GridFS.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::GridFS::File" : {
          "file" : "lib/MongoDB/GridFS/File.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::MongoClient" : {
          "file" : "lib/MongoDB/MongoClient.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::OID" : {
          "file" : "lib/MongoDB/OID.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::Timestamp" : {
          "file" : "lib/MongoDB/Timestamp.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       },
       "MongoDB::WriteResult" : {
          "file" : "lib/MongoDB/WriteResult.pm",
-         "version" : "v0.703.5"
+         "version" : "v0.704.0.0"
       }
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "bugtracker" : {
          "web" : "https://jira.mongodb.org/browse/PERL"
@@ -202,6 +202,6 @@
          "web" : "https://github.com/mongodb/mongo-perl-driver"
       }
    },
-   "version" : "v0.703.5"
+   "version" : "v0.704.0.0"
 }
 

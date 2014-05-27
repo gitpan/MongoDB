@@ -30,7 +30,7 @@ MongoDB::DataTypes - The data types used with MongoDB
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 DESCRIPTION
 
@@ -444,11 +444,7 @@ L<DateTime> object, or L<DateTime::Tiny> object.
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -456,7 +452,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

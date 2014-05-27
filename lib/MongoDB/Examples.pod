@@ -30,7 +30,7 @@ MongoDB::Examples - Some examples of MongoDB syntax
 
 =head1 VERSION
 
-version v0.703.5
+version v0.704.0.0
 
 =head1 MAPPING SQL TO MONGODB
 
@@ -534,11 +534,7 @@ now has C<"name" =E<gt> "george">.
 
 =item *
 
-Florian Ragwitz <rafl@debian.org>
-
-=item *
-
-Kristina Chodorow <kristina@mongodb.org>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -546,7 +542,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+Kristina Chodorow <kristina@mongodb.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
 
 =back
 

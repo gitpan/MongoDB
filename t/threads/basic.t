@@ -18,29 +18,21 @@
 use strict;
 use warnings;
 use Test::More;
+use Config;
+
+BEGIN { plan skip_all => 'requires threads' unless $Config{usethreads} }
 
 use MongoDB;
 use Try::Tiny;
 use threads;
 
 use lib "t/lib";
-use MongoDBTest '$testdb';
-
-my $conn = try {
-    MongoDB::Connection->new({
-        host => exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost',
-        ssl => $ENV{MONGO_SSL}
-    });
-}
-catch {
-    plan skip_all => $_;
-};
+use MongoDBTest '$conn', '$testdb';
 
 my $col = $testdb->get_collection('kooh');
 $col->drop;
 
-TODO: {
-    local $TODO = "broken under find_master => 1";
+{
 
     my $ret = try {
         threads->create(sub {

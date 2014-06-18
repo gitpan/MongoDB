@@ -20,11 +20,12 @@ package MongoDB::Collection;
 # ABSTRACT: A MongoDB Collection
 
 use version;
-our $VERSION = 'v0.704.0.0';
+our $VERSION = 'v0.704.1.0';
 
 use Tie::IxHash;
 use Carp 'carp';
 use boolean;
+use Scalar::Util qw/blessed/;
 use Try::Tiny;
 use Moose;
 use namespace::clean -except => 'meta';
@@ -118,7 +119,7 @@ sub _cmd_primary_only {
     );
 
     if ($ns =~ /\$cmd/) {
-        foreach (keys %{$query}) {
+        foreach ($query->Keys) {
             return 0 if $readpref_commands{lc($_)};
         }
         return 1;
@@ -134,29 +135,48 @@ sub find {
     # old school options - these should be set with MongoDB::Cursor methods
     my ($limit, $skip, $sort_by) = @{ $attrs || {} }{qw/limit skip sort_by/};
 
+    if ( ! $query ) {
+        $query = Tie::IxHash->new();
+    }
+    elsif ( ref $query eq 'ARRAY' ) {
+        $query = Tie::IxHash->new( @$query );
+    }
+    elsif ( ref $query eq 'HASH' ) {
+        $query = Tie::IxHash->new( %$query );
+    }
+    elsif ( (blessed($query) || '') ne 'Tie::IxHash' ) {
+        confess "argument to find must be a hashref, arrayref or Tie::IxHash";
+    }
+
+
+    # if the first key is 'query' we must nest under the '$query' operator
+    my @keys = $query->Keys;
+    if ( @keys && $keys[0] eq 'query' ) {
+        $query = Tie::IxHash->new( '$query' => $query );
+    }
+
     $limit   ||= 0;
     $skip    ||= 0;
 
     my $conn = $self->_database->_client;
-    my $q = $query || {};
     my $ns = $self->full_name;
 
     my $slave_ok = ($conn->_readpref_mode == MongoDB::MongoClient->PRIMARY) ||
-                   _cmd_primary_only($ns, $q)
+                   _cmd_primary_only($ns, $query)
                    ? 0 : 1;
 
     my $cursor = MongoDB::Cursor->new(
         _master    => $conn,
-        _client    => _select_cursor_client($conn, $ns, $q),
+        _client    => _select_cursor_client($conn, $ns, $query),
         _ns        => $ns,
-        _query     => $q,
+        _query     => $query,
         _limit     => $limit,
         _skip      => $skip,
         slave_okay => $slave_ok
     );
 
     # add readpref info if connected to mongos
-    if ($conn->_readpref_pinned && $conn->_is_mongos && !_cmd_primary_only($ns, $q)) {
+    if ($conn->_readpref_pinned && $conn->_is_mongos && !_cmd_primary_only($ns, $query)) {
         my $modeName = MongoDB::MongoClient->_READPREF_MODENAMES->[$conn->_readpref_mode];
         $cursor->_add_readpref({mode => $modeName, tags => $conn->_readpref_tagsets});
     }
@@ -330,7 +350,7 @@ sub aggregate {
             _ns                    => $result->{cursor}{ns},
             _agg_first_batch       => $result->{cursor}{firstBatch}, 
             _agg_batch_size        => scalar @{ $result->{cursor}{firstBatch} },  # for has_next
-            _query                 => \@command,
+            _query                 => Tie::IxHash->new(@command),
         );
 
         $cursor->_init( $result->{cursor}{id} );
@@ -372,7 +392,7 @@ sub parallel_scan {
             _client                => $db->_client,
             _master                => $db->_client,   # fake this because we're already iterating
             _ns                    => $c->{ns},
-            _query                 => \@command,
+            _query                 => Tie::IxHash->new(@command),
             _is_parallel           => 1,
         );
 
@@ -493,6 +513,8 @@ sub ensure_index {
 
     return $res if $res->{ok};    
 
+    # if not ok, no code or code 59 or code 13390 mean "command not available",
+    # per DRIVERS-103 and DRIVERS-132
     if ( ( not $res->{ok} )  && 
          ( not exists $res->{code} or $res->{code} == 59 or $res->{code} == 13390) ) { 
         $obj->Unshift( ns => $tmp_ns );     # restore ns to spec
@@ -533,7 +555,7 @@ sub _make_safe_cursor {
     my $cursor = MongoDB::Cursor->new(_ns => $info->{ns},
                                       _master => $conn,
                                       _client => $conn,
-                                      _query => {});
+                                      _query => Tie::IxHash->new());
     $cursor->_init;
     $cursor->_request_id($info->{'request_id'});
 
@@ -649,7 +671,7 @@ MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version v0.704.0.0
+version v0.704.1.0
 
 =head1 SYNOPSIS
 
@@ -800,6 +822,28 @@ If the update fails and safe is set, the update will croak.
 =back
 
 See also core documentation on update: L<http://docs.mongodb.org/manual/core/update/>.
+
+=head2 initialize_ordered_bulk_op
+
+    my $bulk = $collection->initialize_ordered_bulk_op;
+    $bulk->insert( $doc1 );
+    $bulk->insert( $doc2 );
+    ...
+    my $result = $bulk->execute;
+
+Returns a L<MongoDB::BulkWrite> object to group write operations into fewer network
+round-trips.  This method creates an B<ordered> operation, where operations halt after
+the first error. See L<MongoDB::BulkWrite> for more details.
+
+The method C<ordered_bulk> may be used as an alias for C<initialize_ordered_bulk_op>.
+
+=head2 initialize_unordered_bulk_op
+
+This method works just like L</initialize_ordered_bulk_op> except that the order that
+operations are sent to the database is not guaranteed and errors do not halt processing.
+See L<MongoDB::BulkWrite> for more details.
+
+The method C<unordered_bulk> may be used as an alias for C<initialize_unordered_bulk_op>.
 
 =head2 find_and_modify
 

@@ -19,7 +19,7 @@ package MongoDB::MongoClient;
 # ABSTRACT: A connection to a MongoDB server
 
 use version;
-our $VERSION = 'v0.704.0.0';
+our $VERSION = 'v0.704.1.0';
 
 use MongoDB;
 use MongoDB::Cursor;
@@ -164,11 +164,13 @@ has query_timeout => (
     default  => sub { return $MongoDB::Cursor::timeout; },
 );
 
+# XXX this really shouldn't be required -- it should be populated lazily
+# on each connect (and probably private, too!)
 has max_bson_size => (
     is       => 'rw',
     isa      => 'Int',
     required => 1,
-    default  => 4194304
+    default  => 4194304,
 );
 
 has _max_bson_wire_size => (
@@ -346,14 +348,13 @@ sub BUILD {
         $self->_init_conn($hp[0], $hp[1], $self->ssl);
         if ($self->auto_connect) {
             $self->connect;
-            $self->_check_wire_version;
-            $self->max_bson_size($self->_get_max_bson_size);
         }
         return;
     }
 
     # multiple servers
     my $connected = 0;
+    my %errors;
     foreach (@pairs) {
         # override host, find_master and auto_connect
         my $args = {
@@ -370,13 +371,15 @@ sub BUILD {
         # it's okay if we can't connect, so long as someone can
         eval {
             $self->_servers->{$_}->connect;
-            $self->_servers->{$_}->_check_wire_version;
-            $self->_servers->{$_}->max_bson_size($self->_servers->{$_}->_get_max_bson_size);
         };
 
         # at least one connection worked
         if (!$@) {
             $connected = 1;
+        }
+        else {
+            $errors{$_} = $@;
+            $errors{$_} =~ s/at \S+ line \d+.*//;
         }
     }
 
@@ -386,7 +389,7 @@ sub BUILD {
 
         # if we still aren't connected to anyone, give up
         if (!$connected) {
-            die "couldn't connect to any servers listed: ".join(",", @pairs);
+            die "couldn't connect to any servers listed:\n" . join("", map { "$_: $errors{$_}" } keys %errors );
         }
 
         $master = $self->get_master;
@@ -404,6 +407,12 @@ sub BUILD {
 
     # create a struct that just points to the master's connection
     $self->_init_conn_holder($master);
+}
+
+sub _update_server_attributes {
+    my ($self) = @_;
+    $self->max_bson_size($self->_get_max_bson_size);
+    $self->_check_wire_version;
 }
 
 sub _build__use_write_cmd { 
@@ -531,7 +540,7 @@ sub get_master {
                     auto_connect => 0,
                 };
 
-                $self->_servers->{$_} = MongoDB::MongoClient->new($args);
+                $self->_servers->{$_} = $_ eq $master->{me} ? $conn : MongoDB::MongoClient->new($args);
             }
         }
 
@@ -678,6 +687,7 @@ sub repin {
         $secondaries{"mongodb://$_"} = $value;
     }
     my $primary = $secondaries{$self->_master->host};
+    confess "internal error in host list" unless $primary;
     delete $secondaries{$primary->host};
 
     my $mode = $self->_readpref_mode;
@@ -891,12 +901,12 @@ sub _check_wire_version {
     # check our wire protocol version compatibility
     
     my $master = $self->get_database( $self->db_name )->_try_run_command( { ismaster => 1 } );
+    $master->{minWireVersion} ||= 0;
+    $master->{maxWireVersion} ||= 0;
 
-    if ( exists $master->{minWireVersion} && exists $master->{maxWireVersion} ) {
-        if (    ( $master->{minWireVersion} > $self->max_wire_version )
-             or ( $master->{maxWireVersion} < $self->min_wire_version ) ) { 
-            die "Incompatible wire protocol version. This version of the MongoDB driver is not compatible with the server. You probably need to upgrade this library.";
-        }
+    if (    ( $master->{minWireVersion} > $self->max_wire_version )
+            or ( $master->{maxWireVersion} < $self->min_wire_version ) ) { 
+        die "Incompatible wire protocol version. This version of the MongoDB driver is not compatible with the server. You probably need to upgrade this library.";
     }
 
 }
@@ -927,7 +937,7 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version v0.704.0.0
+version v0.704.1.0
 
 =head1 SYNOPSIS
 

@@ -26,22 +26,30 @@ use MongoDB;
 use Test::More;
 use version;
 
-our @EXPORT_OK = ( '$conn', '$testdb', '$using_2_6' );
+our @EXPORT_OK = ( '$conn', '$testdb', '$using_2_6', '$server_type', '$server_version' );
 our $conn;
 our $testdb;
 our $using_2_6;
+our $server_type;
+our $server_version;
 
-use MongoDBTest::ReplicaSet;
-use MongoDBTest::ShardedCluster;
+# abstract building a connection
+sub build_client {
+    my @args = @_;
+    my $host = exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost';
+    return MongoDB::MongoClient->new(
+        host => $host, ssl => $ENV{MONGO_SSL}, find_master => 1, @args,
+    );
+}
 
 # set up connection to a test database if we can
 BEGIN { 
     eval { 
-        my $host = exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost';
-        $conn = MongoDB::MongoClient->new(
-            host => $host, ssl => $ENV{MONGO_SSL}, find_master => 1
-        );
-        $testdb = $conn->get_database('testdb' . time());
+        $conn = build_client();
+        $testdb = $conn->get_database('testdb' . time()) or
+            die "Can't get database\n";
+        eval { $conn->get_database("admin")->_try_run_command({ serverStatus => 1 }) }
+            or die "Database has auth enabled\n";
     };
 
     if ( $@ ) { 
@@ -53,7 +61,23 @@ BEGIN {
 # check database version
 my $build = $conn->get_database( 'admin' )->get_collection( '$cmd' )->find_one( { buildInfo => 1 } );
 my ($version_str) = $build->{version} =~ m{^([0-9.]+)};
-$using_2_6 = version->parse("v$version_str") >= v2.5.5;
+$server_version = version->parse("v$version_str");
+$using_2_6 = $server_version >= v2.5.5;
+
+# check database type
+my $ismaster = $conn->get_database('admin')->_try_run_command({ismaster => 1});
+if (exists $ismaster->{msg} && $ismaster->{msg} eq 'isdbgrid') {
+    $server_type = 'Mongos';
+}
+elsif ( $ismaster->{ismaster} && exists $ismaster->{setName} ) {
+    $server_type = 'RSPrimary'
+}
+elsif ( ! exists $ismaster->{setName} && ! $ismaster->{isreplicaset} ) {
+    $server_type = 'Standalone'
+}
+else {
+    $server_type = 'Unknown';
+}
 
 # clean up any detritus from failed tests
 END { 

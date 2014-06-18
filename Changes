@@ -1,5 +1,58 @@
 # Change history for the MongoDB Perl driver:
 
+v0.704.1.0 2014-06-17 21:55:18-04:00 America/New_York
+
+  [Bug fixes]
+
+  - PERL-336 fixed unknown command exception with index creation on 2.2 and
+    older servers; we now correctly fall back to legacy index creation
+
+  - PERL-349 fixed request ID misordering when reconnecting to a server; this
+    fixes the known issue regarding test failures with threads under
+    find_master
+
+  - PERL-368 changed all query docs to be coerced to Tie::IxHash; this ensures
+    that command queries are properly ordered and fixes a crashing bug when
+    using command helpers in concert with read preference
+
+  - PERL-369 fixed segfaults deserializing 64-bit integers from BSON on
+    pure 32-bit perls
+
+  - PERL-370 fixed bulk update results for upserts with non OID _id
+    on servers prior to 2.6
+
+  - Fixed stale detection of write command support for bulk operations
+
+  - Fixed wire version checks and max BSON size inspection for replica
+    sets with multiple hosts in the connection URI
+
+  [Documentation]
+
+  - PERL-366 documented bulk write initializers in Collection docs
+
+  - Updated Example.pod docs for field projection (Johann Rolschewski)
+
+  [Testing]
+
+  - PERL-348 tests report MongoDB version in test diagnostics
+
+  - PERL-351 fixed test failures if the local database has auth enabled;
+    tests will skip instead of fail
+
+  - PERL-356 enabled additional tests if the test database is a replica set
+    or sharded cluster
+
+  - Added test for field projection (Johann Rolschewski)
+
+  - Fixed various tests to run against a sharded cluster
+
+  - Moved unused orchestration tests out of the main test suite
+
+  [~ Internal changes ~]
+
+  - PERL-357 added developer tools for testing different cluster
+    configuration
+
 v0.704.0.0 2014-05-27 13:54:01-04:00 America/New_York
 
   [!!! Incompatible Changes !!!]

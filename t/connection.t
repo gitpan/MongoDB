@@ -28,8 +28,6 @@ use MongoDB;
 use lib "t/lib";
 use MongoDBTest '$conn', '$testdb';
 
-plan tests => 33;
-
 throws_ok {
     MongoDB::MongoClient->new(host => 'localhost', port => 1, ssl => $ENV{MONGO_SSL});
 } qr/couldn't connect to server/, 'exception on connection failure';
@@ -118,11 +116,11 @@ SKIP: {
 {
     my $timeout = $MongoDB::Cursor::timeout;
 
-    my $conn2 = MongoDB::MongoClient->new(auto_connect => 0, ssl => $ENV{MONGO_SSL});
+    my $conn2 = MongoDBTest::build_client(auto_connect => 0);
     is($conn2->query_timeout, $timeout, 'query timeout');
 
     $MongoDB::Cursor::timeout = 40;
-    $conn2 = MongoDB::MongoClient->new(auto_connect => 0, ssl => $ENV{MONGO_SSL});
+    $conn2 = MongoDBTest::build_client(auto_connect => 0);
     is($conn2->query_timeout, 40, 'query timeout');
 
     $MongoDB::Cursor::timeout = $timeout;
@@ -133,54 +131,24 @@ SKIP: {
     my $size = $conn->max_bson_size;
     my $result = $conn->get_database( 'admin' )->run_command({buildinfo => 1});
     if (exists $result->{'maxBsonObjectSize'}) {
-        is($size, $result->{'maxBsonObjectSize'});
+        is($size, $result->{'maxBsonObjectSize'}, 'max bson size');
     }
     else {
-        is($size, 4*1024*1024);
+        is($size, 4*1024*1024, 'max bson size');
     }
 }
 
 # wire protocol versions
-SKIP: { 
-    skip "no wire version check", 5, unless $conn->can( '_check_wire_version' );
-    # mock run_command so we can test our own isMaster responses
-    no warnings 'redefine';
-    my $server_doc = { ismaster => 1, 
-                       maxBsonObjectSize => 16777216,
-                       maxMessageSizeBytes => 48000000,
-                       ok => 1 };
 
-    my $old_method = \&MongoDB::Database::_try_run_command;
-    local *MongoDB::Database::_try_run_command = sub {
-        my $self = shift;
+{
 
-        if ( ref $_[0] eq 'HASH' && exists $_[0]{ismaster} ) { 
-            return $server_doc;
-        }
-
-        return $self->$old_method( @_ );
-    };
-
-
-    my $host = exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost';
-    my $test_conn1 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
-
-    is $test_conn1->min_wire_version, 0;
-    is $test_conn1->max_wire_version, 2;
-
-    $server_doc->{minWireVersion} = 0;
-    $server_doc->{maxWireVersion} = 2;
-
-    my $test_conn2 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
-
-    is $test_conn2->min_wire_version, 0;
-    is $test_conn2->max_wire_version, 2;
-
-    $server_doc->{minWireVersion} = 3;
-    $server_doc->{maxWireVersion} = 4;
+    is $conn->min_wire_version, 0, 'default min wire version';
+    is $conn->max_wire_version, 2, 'default max wire version';
 
     throws_ok {
-        my $test_conn3 = MongoDB::MongoClient->new( host => $host, ssl => $ENV{MONGO_SSL} );
+        MongoDBTest::build_client(
+            min_wire_version => 99, max_wire_version => 100
+        );
     } qr/Incompatible wire protocol/i, 'exception on wire protocol';
 
 }
@@ -190,9 +158,11 @@ SKIP: {
     my $host = exists $ENV{MONGOD} ? $ENV{MONGOD} : 'localhost';
     my ($connections, $start);
     for (1..10) {
-        my $conn2 = MongoDB::MongoClient->new("host" => $host, ssl => $ENV{MONGO_SSL});
+        my $conn2 = MongoDBTest::build_client;
         $connections =  $conn->get_database("admin")->eval("db.serverStatus().connections.current");
         $start = $connections unless defined $start
     }
     is(abs($connections-$start) < 3, 1, 'connection dropped after scope');
 }
+
+done_testing;

@@ -18,7 +18,7 @@
 use strict;
 use warnings;
 use Test::More;
-use Test::Exception;
+use Test::Fatal;
 use Test::Warn;
 
 use MongoDB::Timestamp; # needed if db is being run as master
@@ -26,7 +26,7 @@ use MongoDB::Timestamp; # needed if db is being run as master
 use MongoDB;
 
 use lib "t/lib";
-use MongoDBTest '$conn', '$testdb', '$using_2_6';
+use MongoDBTest '$conn', '$testdb', '$server_version';
 
 # get_database
 {
@@ -64,16 +64,11 @@ use MongoDBTest '$conn', '$testdb', '$using_2_6';
 }
 
 # getlasterror
-SKIP: {
-    my $admin = $conn->get_database('admin');
-    my $buildinfo = $admin->run_command({buildinfo => 1});
+subtest 'getlasterror' => sub {
+    plan skip_all => "MongoDB 1.5+ needed"
+        unless $server_version >= v1.5.0;
 
-    #skip "MongoDB 1.5+ needed", 1 if $buildinfo->{version} =~ /(0\.\d+\.\d+)|(1\.[1234]\d*.\d+)/;
-    #my $result = $testdb->last_error({w => 20, wtimeout => 1});
-    #is($result, 'timed out waiting for slaves', 'last error timeout');
-
-    skip "MongoDB 1.5+ needed", 2 if $buildinfo->{version} =~ /(0\.\d+\.\d+)|(1\.[1234]\d*.\d+)/;
-
+    $testdb->run_command([ismaster => 1]);
     my $result = $testdb->last_error({fsync => 1});
     is($result->{ok}, 1);
     is($result->{err}, undef);
@@ -84,7 +79,7 @@ SKIP: {
 
     # mongos never returns 'n'
     is($result->{n}, $conn->_is_mongos ? undef : 0, 'last_error: n');
-}
+};
 
 # reseterror 
 {
@@ -103,13 +98,15 @@ SKIP: {
 }
 
 # eval
-{
+subtest "eval" => sub {
+    plan skip_all => "eval not available under auth"
+        if $conn->password;
     my $hello = $testdb->eval('function(x) { return "hello, "+x; }', ["world"]);
     is('hello, world', $hello, 'db eval');
 
     my $err = $testdb->eval('function(x) { xreturn "hello, "+x; }', ["world"]);
     like( $err, qr/SyntaxError/, 'js err');
-}
+};
 
 # tie
 {

@@ -8,21 +8,8 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
-4b88066 PERL-349 fix request ID misordering when reconnecting
-ce09ea1 PERL-356 fix wire protocol test on older databases
-76ae5e9 PERL-356 Simplify wire version tests
-24ca86d PERL-357 Add rudimentary replica set orchestration
-289e874 PERL-357 add prototype for orchestration harness
-54408bf PERL-348 report MongoDB version in test diagnostics
-dc1658c PERL-356 move unused auth test program out of main test suite
-8117ff0 PERL-356 move more orchestration tests out of main test suite
-db805d3 PERL-336 don't throw exceptions on command queries
-2fc4aa5 PERL-351 skip tests if database has auth enabled
-7cb8c87 PERL-368 coerce query documents into Tie::IxHash objects
-84fa351 PERL-356 split out static vs dynamic tests
-8c2aff4 PERL-370 fixed bulk upserts with non OID _id
-d8d0863 PERL-366 document bulk write initialization methods
-3bf08c2 PERL-369 fix segfault on pure 32bit perl
+9e6a5c5 PERL-376 Reorder Moose/MongoDB module loading
+1f36fb8 PERL-355 use random test database names for parallel testing
 
 EOC
 
@@ -36,7 +23,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.704.1.0(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.704.2.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;

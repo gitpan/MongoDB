@@ -6,11 +6,9 @@ author:
   - 'Kristina Chodorow <kristina@mongodb.org>'
   - 'Florian Ragwitz <rafl@debian.org>'
 build_requires:
-  Data::Dump: '0'
   Data::Dumper: '0'
   Data::Types: '0'
   DateTime::Tiny: '0'
-  Devel::Peek: '0'
   ExtUtils::MakeMaker: '0'
   File::Slurp: '0'
   File::Spec::Functions: '0'
@@ -19,7 +17,6 @@ build_requires:
   JSON: '0'
   List::Util: '0'
   Test::Deep: '0'
-  Test::Exception: '0'
   Test::Fatal: '0'
   Test::More: '0.96'
   Test::Warn: '0'
@@ -32,7 +29,7 @@ configure_requires:
   ExtUtils::MakeMaker: '6.30'
   Path::Tiny: '0.052'
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 5.019, CPAN::Meta::Converter version 2.140640'
+generated_by: 'Dist::Zilla version 5.019, CPAN::Meta::Converter version 2.141170'
 license: apache
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -40,76 +37,86 @@ meta-spec:
 name: MongoDB
 no_index:
   directory:
+    - devel
     - inc
     - t
     - xt
 provides:
   MongoDB:
     file: lib/MongoDB.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::BSON:
     file: lib/MongoDB/BSON.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::BSON::Binary:
     file: lib/MongoDB/BSON/Binary.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::BSON::Regexp:
     file: lib/MongoDB/BSON/Regexp.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::BulkWrite:
     file: lib/MongoDB/BulkWrite.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::BulkWriteView:
     file: lib/MongoDB/BulkWriteView.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::Code:
     file: lib/MongoDB/Code.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::Collection:
     file: lib/MongoDB/Collection.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::CommandResult:
     file: lib/MongoDB/CommandResult.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::Connection:
     file: lib/MongoDB/Connection.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
+  MongoDB::ConnectionError:
+    file: lib/MongoDB/Error.pm
+    version: v0.704.2.0
   MongoDB::Cursor:
     file: lib/MongoDB/Cursor.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::DBRef:
     file: lib/MongoDB/DBRef.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::Database:
     file: lib/MongoDB/Database.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::DatabaseError:
     file: lib/MongoDB/Error.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::DocumentSizeError:
     file: lib/MongoDB/Error.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::Error:
     file: lib/MongoDB/Error.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::GridFS:
     file: lib/MongoDB/GridFS.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::GridFS::File:
     file: lib/MongoDB/GridFS/File.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::MongoClient:
     file: lib/MongoDB/MongoClient.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::OID:
     file: lib/MongoDB/OID.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
   MongoDB::Timestamp:
     file: lib/MongoDB/Timestamp.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
+  MongoDB::WriteConcernError:
+    file: lib/MongoDB/Error.pm
+    version: v0.704.2.0
+  MongoDB::WriteError:
+    file: lib/MongoDB/Error.pm
+    version: v0.704.2.0
   MongoDB::WriteResult:
     file: lib/MongoDB/WriteResult.pm
-    version: v0.704.1.0
+    version: v0.704.2.0
 requires:
   Carp: '0'
   Class::MOP::Class: '0'
@@ -127,6 +134,7 @@ requires:
   Syntax::Keyword::Junction: '0'
   Throwable: '0'
   Tie::IxHash: '0'
+  Time::HiRes: '0'
   Try::Tiny: '0'
   XSLoader: '0'
   boolean: '0'
@@ -142,4 +150,4 @@ resources:
   bugtracker: https://jira.mongodb.org/browse/PERL
   homepage: https://github.com/mongodb/mongo-perl-driver
   repository: https://github.com/mongodb/mongo-perl-driver.git
-version: v0.704.1.0
+version: v0.704.2.0

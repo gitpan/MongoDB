@@ -26,10 +26,9 @@ use MongoDB;
 use Test::More;
 use version;
 
-our @EXPORT_OK = ( '$conn', '$testdb', '$using_2_6', '$server_type', '$server_version' );
+our @EXPORT_OK = ( '$conn', '$testdb', '$server_type', '$server_version' );
 our $conn;
 our $testdb;
-our $using_2_6;
 our $server_type;
 our $server_version;
 
@@ -42,11 +41,13 @@ sub build_client {
     );
 }
 
+sub rand_db_name {'testdb' . int(rand(2**31))}
+
 # set up connection to a test database if we can
 BEGIN { 
     eval { 
         $conn = build_client();
-        $testdb = $conn->get_database('testdb' . time()) or
+        $testdb = $conn->get_database( rand_db_name() ) or
             die "Can't get database\n";
         eval { $conn->get_database("admin")->_try_run_command({ serverStatus => 1 }) }
             or die "Database has auth enabled\n";
@@ -62,7 +63,6 @@ BEGIN {
 my $build = $conn->get_database( 'admin' )->get_collection( '$cmd' )->find_one( { buildInfo => 1 } );
 my ($version_str) = $build->{version} =~ m{^([0-9.]+)};
 $server_version = version->parse("v$version_str");
-$using_2_6 = $server_version >= v2.5.5;
 
 # check database type
 my $ismaster = $conn->get_database('admin')->_try_run_command({ismaster => 1});

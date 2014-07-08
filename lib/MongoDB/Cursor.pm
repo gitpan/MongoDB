@@ -20,12 +20,13 @@ package MongoDB::Cursor;
 # ABSTRACT: A cursor/iterator for Mongo query results
 
 use version;
-our $VERSION = 'v0.704.1.0';
+our $VERSION = 'v0.704.2.0';
 
+use Moose;
+use MongoDB;
 use MongoDB::Error;
 use boolean;
 use Tie::IxHash;
-use Moose;
 use namespace::clean -except => 'meta';
 
 #pod =head1 NAME
@@ -128,6 +129,15 @@ has _fields => (
 );
 
 has _limit => (
+    is => 'rw',
+    isa => 'Int',
+    required => 0,
+    default => 0,
+);
+
+# XXX this is here for testing; we can rationalize this later
+# with _aggregate_batch_size when we convert to pure Perl
+has _batch_size => (
     is => 'rw',
     isa => 'Int',
     required => 0,
@@ -276,7 +286,7 @@ sub _do_query {
         ($self->immortal << 4) |
         ($self->partial << 7);
 
-    my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit, $self->_query, $self->_fields);
+    my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit || $self->_batch_size, $self->_query, $self->_fields);
     $self->_request_id($info->{'request_id'});
 
     if ( length($query) > $self->_client->_max_bson_wire_size ) {
@@ -385,6 +395,9 @@ sub limit {
 
 sub max_time_ms { 
     my ( $self, $num ) = @_;
+    $num = 0 unless defined $num;
+    confess "max_time_ms must be non-negative"
+      if $num < 0;
     confess "can not set max_time_ms after querying"
       if $self->started_iterating;
 
@@ -714,7 +727,7 @@ MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version v0.704.1.0
+version v0.704.2.0
 
 =head1 SYNOPSIS
 

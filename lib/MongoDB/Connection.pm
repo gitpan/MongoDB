@@ -19,8 +19,9 @@ package MongoDB::Connection;
 # ABSTRACT: A connection to a MongoDB server (DEPRECATED)
 
 use version;
-our $VERSION = 'v0.704.1.0';
+our $VERSION = 'v0.704.2.0';
 
+use Moose;
 use MongoDB;
 use MongoDB::Cursor;
 use MongoDB::MongoClient;
@@ -30,7 +31,6 @@ use Digest::MD5;
 use Tie::IxHash;
 use Carp 'carp';
 use boolean;
-use Moose;
 use namespace::clean -except => 'meta';
 
 has '_client' => (
@@ -63,7 +63,7 @@ MongoDB::Connection - A connection to a MongoDB server (DEPRECATED)
 
 =head1 VERSION
 
-version v0.704.1.0
+version v0.704.2.0
 
 =head1 DEPRECATED
 

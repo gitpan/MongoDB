@@ -73,6 +73,7 @@ my $static_prereqs = do { my $x = {
                                       'Syntax::Keyword::Junction' => '0',
                                       'Throwable' => '0',
                                       'Tie::IxHash' => '0',
+                                      'Time::HiRes' => '0',
                                       'Try::Tiny' => '0',
                                       'XSLoader' => '0',
                                       'boolean' => '0',
@@ -92,11 +93,9 @@ my $static_prereqs = do { my $x = {
                                      'CPAN::Meta::Requirements' => '2.120900'
                                    },
                    'requires' => {
-                                   'Data::Dump' => '0',
                                    'Data::Dumper' => '0',
                                    'Data::Types' => '0',
                                    'DateTime::Tiny' => '0',
-                                   'Devel::Peek' => '0',
                                    'ExtUtils::MakeMaker' => '0',
                                    'File::Slurp' => '0',
                                    'File::Spec::Functions' => '0',
@@ -105,7 +104,6 @@ my $static_prereqs = do { my $x = {
                                    'JSON' => '0',
                                    'List::Util' => '0',
                                    'Test::Deep' => '0',
-                                   'Test::Exception' => '0',
                                    'Test::Fatal' => '0',
                                    'Test::More' => '0.96',
                                    'Test::Warn' => '0',

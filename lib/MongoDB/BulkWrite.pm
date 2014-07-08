@@ -19,7 +19,7 @@ package MongoDB::BulkWrite;
 # ABSTRACT: MongoDB bulk write interface
 
 use version;
-our $VERSION = 'v0.704.1.0';
+our $VERSION = 'v0.704.2.0';
 
 use MongoDB::Error;
 use MongoDB::OID;
@@ -108,8 +108,7 @@ has '_use_write_cmd' => (
 
 sub _build__use_write_cmd {
     my ($self) = @_;
-    my $use_it = $self->_client->_master->_use_write_cmd;
-    return $use_it;
+    return $self->_client->get_master->_use_write_cmd;
 }
 
 with 'MongoDB::Role::_WriteQueue';
@@ -176,11 +175,15 @@ sub insert {
           if @$doc % 2;
         $doc = {@$doc};
     }
-
-    if ( ref $doc eq 'Tie::IxHash' ) {
-        $doc->STORE( '_id', MongoDB::OID->new ) unless $doc->EXISTS('_id');
+    elsif ( ref $doc eq 'HASH' ) {
+        $doc = {%$doc}; # shallow copy
     }
     else {
+        $doc = Tie::IxHash->new( map {; $_ => $doc->FETCH($_) } $doc->Keys );
+        $doc->STORE( '_id', MongoDB::OID->new ) unless $doc->EXISTS('_id');
+    }
+
+    if ( ref $doc eq 'HASH' ) {
         $doc->{_id} = MongoDB::OID->new unless exists $doc->{_id};
     }
 
@@ -694,7 +697,7 @@ MongoDB::BulkWrite - MongoDB bulk write interface
 
 =head1 VERSION
 
-version v0.704.1.0
+version v0.704.2.0
 
 =head1 SYNOPSIS
 

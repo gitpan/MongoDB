@@ -19,7 +19,7 @@ package MongoDB::Role::_Writeable;
 # Role providing a write queue
 
 use version;
-our $VERSION = 'v0.704.2.0';
+our $VERSION = 'v0.704.3.0';
 
 use Moose::Role;
 use namespace::clean -except => 'meta';

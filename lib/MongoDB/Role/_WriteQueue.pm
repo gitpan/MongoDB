@@ -19,7 +19,7 @@ package MongoDB::Role::_WriteQueue;
 # MongoDB interface for queuing operations for execution
 
 use version;
-our $VERSION = 'v0.704.2.0';
+our $VERSION = 'v0.704.3.0';
 
 use Moose::Role;
 use namespace::clean -except => 'meta';

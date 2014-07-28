@@ -26,7 +26,10 @@ use MongoDB::Timestamp; # needed if db is being run as master
 use MongoDB;
 
 use lib "t/lib";
-use MongoDBTest '$conn', '$testdb';
+use MongoDBTest qw/build_client get_test_db/;
+
+my $conn = build_client();
+my $testdb = get_test_db($conn);
 
 like(
     exception { MongoDB::MongoClient->new(host => 'localhost', port => 1, ssl => $ENV{MONGO_SSL}); },
@@ -128,19 +131,49 @@ SKIP: {
     $testdb->drop;
 }
 
+subtest "options" => sub {
+
+    subtest "connection" => sub {
+
+        my $ssl = "true";
+        my $timeout = 40000;
+        my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl=$ssl&connectTimeoutMS=$timeout", auto_connect => 0});
+
+        is( $client->ssl, 1, "connect with ssl set" );
+        is( $client->timeout, $timeout, "connection timeout set" );
+    };
+
+    subtest "invalid option value" => sub {
+
+        like(
+            exception { MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl=", auto_connect => 0}) },
+            qr/expected key value pair/,
+            'key should have value'
+        );
+    };
+
+    subtest "write concern" => sub {
+
+        my $w = 2;
+        my $wtimeout = 200;
+        my $j = "true";
+        my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?w=$w&wtimeoutMS=$wtimeout&journal=$j", auto_connect => 0});
+
+        is( $client->w, $w, "write acknowledgement set" );
+        is( $client->wtimeout, $wtimeout, "write acknowledgement timeout set" );
+        is( $client->j, 1, "sync to journal" );
+    };
+};
+
 
 # query_timeout
 {
-    my $timeout = $MongoDB::Cursor::timeout;
+    my $client = MongoDB::MongoClient->new(auto_connect => 0);
+    is($client->query_timeout, $MongoDB::Cursor::timeout, 'default query timeout');
 
-    my $conn2 = MongoDBTest::build_client(auto_connect => 0);
-    is($conn2->query_timeout, $timeout, 'query timeout');
-
-    $MongoDB::Cursor::timeout = 40;
-    $conn2 = MongoDBTest::build_client(auto_connect => 0);
-    is($conn2->query_timeout, 40, 'query timeout');
-
-    $MongoDB::Cursor::timeout = $timeout;
+    local $MongoDB::Cursor::timeout = 40;
+    $client = MongoDB::MongoClient->new(auto_connect => 0);
+    is($client->query_timeout, 40, 'changed default query timeout');
 }
 
 # max_bson_size

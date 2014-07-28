@@ -22,7 +22,7 @@ package MongoDB::Error;
 # ABSTRACT: MongoDB Driver Error classes
 
 use version;
-our $VERSION = 'v0.704.2.0';
+our $VERSION = 'v0.704.3.0';
 
 use Moose;
 use Moose::Meta::Class ();
@@ -34,9 +34,10 @@ my $ERROR_CODES;
 
 BEGIN {
     $ERROR_CODES = {
-        BAD_VALUE           => 2,
-        UNKNOWN_ERROR       => 8,
-        WRITE_CONCERN_ERROR => 64,
+        BAD_VALUE                   => 2,
+        UNKNOWN_ERROR               => 8,
+        WRITE_CONCERN_ERROR         => 64,
+        CANT_OPEN_DB_IN_READ_LOCK   => 15927,
     };
 }
 
@@ -145,7 +146,7 @@ MongoDB::Error - MongoDB Driver Error classes
 
 =head1 VERSION
 
-version v0.704.2.0
+version v0.704.3.0
 
 =head1 SYNOPSIS
 

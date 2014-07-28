@@ -20,7 +20,7 @@ package MongoDB::Database;
 # ABSTRACT: A MongoDB Database
 
 use version;
-our $VERSION = 'v0.704.2.0';
+our $VERSION = 'v0.704.3.0';
 
 use MongoDB::CommandResult;
 use MongoDB::Error;
@@ -109,7 +109,7 @@ sub _try_run_command {
     my $obj = $self->get_collection('$cmd')->find_one($command);
     return $obj if $obj->{ok};
     MongoDB::DatabaseError->throw(
-        message => $obj->{errmsg},
+        message => $obj->{errmsg} || $obj->{'$err'},
         result => MongoDB::CommandResult->new(result => $obj),
     );
 }
@@ -149,7 +149,7 @@ MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version v0.704.2.0
+version v0.704.3.0
 
 =head1 SYNOPSIS
 

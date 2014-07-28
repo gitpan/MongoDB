@@ -19,13 +19,14 @@ package MongoDB::MongoClient;
 # ABSTRACT: A connection to a MongoDB server
 
 use version;
-our $VERSION = 'v0.704.2.0';
+our $VERSION = 'v0.704.3.0';
 
 use Moose;
 use MongoDB;
 use MongoDB::Cursor;
 use MongoDB::BSON::Binary;
 use MongoDB::BSON::Regexp;
+use MongoDB::Error;
 use Digest::MD5;
 use Tie::IxHash;
 use Time::HiRes qw/usleep/;
@@ -138,7 +139,7 @@ has auto_connect => (
 );
 
 has timeout => (
-    is       => 'ro',
+    is       => 'rw',
     isa      => 'Int',
     required => 1,
     default  => 20000,
@@ -209,7 +210,7 @@ has _is_mongos => (
 );
 
 has ssl => (
-    is       => 'ro',
+    is       => 'rw',
     isa      => 'Bool',
     required => 1,
     default  => 0,
@@ -308,28 +309,29 @@ sub BUILD {
 
     my @pairs;
 
-    # supported syntax (see http://docs.mongodb.org/manual/reference/connection-string/)
-    if ($self->host =~ m{ ^
-            mongodb://
-            (?: ([^:]*) : ([^@]*) @ )? # [username:password@]
-            ([^/]*) # host1[:port1][,host2[:port2],...[,hostN[:portN]]]
-            (?:
-               / ([^?]*) # /[database]
-                (?: [?] (.*) )? # [?options]
-            )?
-            $ }x ) {
+    my %parsed_connection = _parse_connection_string($self->host);
 
-        my ($username, $password, $hostpairs, $database, $options) = ($1, $2, $3, $4, $5);
+    # supported syntax (see http://docs.mongodb.org/manual/reference/connection-string/)
+    if (%parsed_connection) {
+
+        @pairs = @{$parsed_connection{hostpairs}};
 
         # we add these things to $opts as well as self so that they get propagated when we recurse for multiple servers
-        $self->username($opts->{username} = $username) if $username;
-        $self->password($opts->{password} = $password) if $password;
-        $self->db_name($opts->{db_name} = $database) if $database;
+        for my $k ( qw/username password db_name/ ) {
+            $self->$k($opts->{$k} = $parsed_connection{$k}) if exists $parsed_connection{$k};
+        }
 
-        $hostpairs = 'localhost' unless $hostpairs;
-        @pairs =  map { $_ .= ':27017' unless $_ =~ /:/ ; $_ } split ',', $hostpairs;
+        # Process options
+        my %options = %{$parsed_connection{options}} if defined $parsed_connection{options};
 
-        # TODO handle standard options from $options
+        # Add connection options
+        $self->ssl($opts->{ssl} = _str_to_bool($options{ssl})) if exists $options{ssl};
+        $self->timeout($opts->{timeout} = $options{connectTimeoutMS}) if exists $options{connectTimeoutMS};
+
+        # Add write concern options
+        $self->w($opts->{w} = $options{w}) if exists $options{w};
+        $self->wtimeout($opts->{wtimeout} = $options{wtimeoutMS}) if exists $options{wtimeoutMS};
+        $self->j($opts->{j} = _str_to_bool($options{journal})) if exists $options{journal};
     }
     # deprecated syntax
     else {
@@ -352,24 +354,27 @@ sub BUILD {
     }
 
     # multiple servers
+    my $first_server;
     my $connected = 0;
     my %errors;
-    foreach (@pairs) {
+    for my $pair (@pairs) {
+
         # override host, find_master and auto_connect
         my $args = {
             %$opts,
-            host => "mongodb://$_",
+            host => "mongodb://$pair",
             find_master => 0,
             auto_connect => 0,
         };
 
-        $self->_servers->{$_} = MongoDB::MongoClient->new($args);
+        $self->_servers->{$pair} = MongoDB::MongoClient->new($args);
+        $first_server = $self->_servers->{$pair} unless defined $first_server;
 
         next unless $self->auto_connect;
 
         # it's okay if we can't connect, so long as someone can
         eval {
-            $self->_servers->{$_}->connect;
+            $self->_servers->{$pair}->connect;
         };
 
         # at least one connection worked
@@ -377,8 +382,8 @@ sub BUILD {
             $connected = 1;
         }
         else {
-            $errors{$_} = $@;
-            $errors{$_} =~ s/at \S+ line \d+.*//;
+            $errors{$pair} = $@;
+            $errors{$pair} =~ s/at \S+ line \d+.*//;
         }
     }
 
@@ -391,16 +396,75 @@ sub BUILD {
             die "couldn't connect to any servers listed:\n" . join("", map { "$_: $errors{$_}" } keys %errors );
         }
 
-        $master = $self->get_master;
+        $master = $self->get_master($first_server);
         $self->max_bson_size($master->max_bson_size);
     }
     else {
         # no auto-connect so just pick one. if auto-reconnect is set then it will connect as needed
-        ($master) = values %{$self->_servers};
+        $master = $first_server;
     }
 
     # create a struct that just points to the master's connection
     $self->_init_conn_holder($master);
+}
+
+sub _str_to_bool {
+    my $str = shift;
+    confess "cannot convert undef to bool" unless defined $str;
+    my $ret = $str eq "true" ? 1 : $str eq "false" ? 0 : undef;
+    return $ret unless !defined $ret;
+    confess "expected boolean string 'true' or 'false' but instead received '$str'";
+}
+
+sub _unescape_all {
+    my $str = shift;
+    $str =~ s/%([0-9a-f]{2})/chr(hex($1))/ieg;
+    return $str;
+}
+
+sub _parse_connection_string {
+
+    my ($host) = @_;
+    my %result;
+
+    if ($host =~ m{ ^
+            mongodb://
+            (?: ([^:]*) : ([^@]*) @ )? # [username:password@]
+            ([^/]*) # host1[:port1][,host2[:port2],...[,hostN[:portN]]]
+            (?:
+               / ([^?]*) # /[database]
+                (?: [?] (.*) )? # [?options]
+            )?
+            $ }x ) {
+
+        ($result{username}, $result{password}, $result{hostpairs}, $result{db_name}, $result{options}) = ($1, $2, $3, $4, $5);
+
+        # Decode components
+        for my $subcomponent ( qw/username password db_name/ ) {
+            $result{$subcomponent} = _unescape_all($result{$subcomponent}) unless !(defined $result{$subcomponent});
+        }
+
+        $result{hostpairs} = 'localhost' unless $result{hostpairs};
+        $result{hostpairs} = [
+            map { @_ = split ':', $_; _unescape_all($_[0]).":"._unescape_all($_[1]) }
+            map { $_ .= ':27017' unless $_ =~ /:/ ; $_ } split ',', $result{hostpairs}
+        ];
+
+        $result{options} =
+            { map {
+                 my @kv = split '=', $_;
+                 confess 'expected key value pair' unless @kv == 2;
+                 ($kv[0], $kv[1]) = (_unescape_all($kv[0]), _unescape_all($kv[1]));
+                 @kv;
+              } split '&', $result{options}
+            } if defined $result{options};
+
+        delete $result{username} unless defined $result{username} && length $result{username};
+        delete $result{password} unless defined $result{password}; # can be empty string
+        delete $result{db_name} unless defined $result{db_name} && length $result{db_name};
+    }
+
+    return %result;
 }
 
 sub _update_server_attributes {
@@ -437,13 +501,24 @@ sub _get_max_bson_size {
 
 sub database_names {
     my ($self) = @_;
-    my $ret = $self->get_database('admin')->run_command({ listDatabases => 1 });
-    if (ref($ret) eq 'HASH' && exists $ret->{databases}) {
-        return map { $_->{name} } @{ $ret->{databases} };
+
+    my @databases;
+    my $max_tries = 3;
+    for my $try ( 1 .. $max_tries ) {
+        last if try {
+            my $result = $self->get_database('admin')->_try_run_command({ listDatabases => 1 });
+            if (ref($result) eq 'HASH' && exists $result->{databases}) {
+                @databases = map { $_->{name} } @{ $result->{databases} };
+            }
+            return 1;
+        } catch {
+            # can't open db in a read lock
+            return if $_->{result}->{result}{code} == CANT_OPEN_DB_IN_READ_LOCK() || $try < $max_tries;
+            die $_;
+        };
     }
-    else {
-        die ($ret);
-    }
+
+    return @databases;
 }
 
 sub get_database {
@@ -940,7 +1015,7 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version v0.704.2.0
+version v0.704.3.0
 
 =head1 SYNOPSIS
 
@@ -1344,6 +1419,8 @@ is true, then connections will be re-established as needed.
 =head1 SEE ALSO
 
 Core documentation on connections: L<http://docs.mongodb.org/manual/reference/connection-string/>.
+
+The currently supported connection string options are ssl, connectTimeoutMS, w, wtimeoutMS, and journal.
 
 =head1 AUTHORS
 

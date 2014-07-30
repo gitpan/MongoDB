@@ -19,7 +19,7 @@ package MongoDB::MongoClient;
 # ABSTRACT: A connection to a MongoDB server
 
 use version;
-our $VERSION = 'v0.704.3.0';
+our $VERSION = 'v0.704.4.0';
 
 use Moose;
 use MongoDB;
@@ -1015,7 +1015,7 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version v0.704.3.0
+version v0.704.4.0
 
 =head1 SYNOPSIS
 

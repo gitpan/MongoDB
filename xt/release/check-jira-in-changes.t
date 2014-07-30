@@ -8,12 +8,6 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
-5c197fd PERL-130 Improve connection string support
-59e0234 PERL-387 amend retry logic
-1290e19 PERL-387 added retry logic to Database::database_names()
-4823020 PERL-166 Fix tailable cursors with no results
-e492c10 Merge pull request #102 from mongodb/ed/PERL-290
-bec3c12 Merge pull request #100 from edaniels/ed/PERL-344
 
 EOC
 
@@ -29,7 +23,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.704.3.0(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.704.4.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;

@@ -19,7 +19,7 @@ package MongoDB::OID;
 # ABSTRACT: A Mongo Object ID
 
 use version;
-our $VERSION = 'v0.704.4.0';
+our $VERSION = 'v0.704.5.0';
 
 use Moose;
 use MongoDB;
@@ -172,7 +172,7 @@ MongoDB::OID - A Mongo Object ID
 
 =head1 VERSION
 
-version v0.704.4.0
+version v0.704.5.0
 
 =head1 SYNOPSIS
 

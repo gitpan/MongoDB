@@ -19,7 +19,7 @@ package MongoDB::BulkWriteView;
 # ABSTRACT: Bulk write operations against a query document
 
 use version;
-our $VERSION = 'v0.704.4.0';
+our $VERSION = 'v0.704.5.0';
 
 use Moose;
 use namespace::clean -except => 'meta';
@@ -51,7 +51,7 @@ MongoDB::BulkWriteView - Bulk write operations against a query document
 
 =head1 VERSION
 
-version v0.704.4.0
+version v0.704.5.0
 
 =head1 SYNOPSIS
 

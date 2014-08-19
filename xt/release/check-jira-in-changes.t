@@ -8,6 +8,8 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
+f75b3f3 PERL-410 die on BSON encoding/decoding if invalid UTF-8 is detected
+fed34c4 PERL-407 fixed request_id race condition under threads
 
 EOC
 
@@ -23,7 +25,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.704.4.0(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.704.5.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;

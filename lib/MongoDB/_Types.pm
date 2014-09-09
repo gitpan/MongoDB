@@ -19,7 +19,7 @@ package MongoDB::_Types;
 # MongoDB Moose type definitions
 
 use version;
-our $VERSION = 'v0.704.5.0';
+our $VERSION = 'v0.705.0.0';
 
 use Moose::Util::TypeConstraints;
 

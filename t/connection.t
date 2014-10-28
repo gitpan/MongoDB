@@ -137,6 +137,7 @@ subtest "options" => sub {
 
         my $ssl = "true";
         my $timeout = 40000;
+        local $SIG{__WARN__} = sub {};
         my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl=$ssl&connectTimeoutMS=$timeout", auto_connect => 0});
 
         is( $client->ssl, 1, "connect with ssl set" );
@@ -193,7 +194,7 @@ subtest "options" => sub {
 {
 
     is $conn->min_wire_version, 0, 'default min wire version';
-    is $conn->max_wire_version, 2, 'default max wire version';
+    is $conn->max_wire_version, 3, 'default max wire version';
 
     like(
         exception { MongoDBTest::build_client( min_wire_version => 99, max_wire_version => 100) },

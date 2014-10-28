@@ -19,7 +19,7 @@ package MongoDB::MongoClient;
 # ABSTRACT: A connection to a MongoDB server
 
 use version;
-our $VERSION = 'v0.705.0.0';
+our $VERSION = 'v0.706.0.0';
 
 use Moose;
 use MongoDB;
@@ -27,7 +27,9 @@ use MongoDB::Cursor;
 use MongoDB::BSON::Binary;
 use MongoDB::BSON::Regexp;
 use MongoDB::Error;
+use Authen::SCRAM::Client 0.003;
 use Digest::MD5;
+use MIME::Base64 qw/encode_base64 decode_base64/;
 use Tie::IxHash;
 use Time::HiRes qw/usleep/;
 use Carp 'carp', 'croak';
@@ -284,15 +286,13 @@ has inflate_regexps => (
 has min_wire_version => ( 
     is        => 'ro',
     isa       => 'Int',
-    required  => 1,
     default   => 0
 );
 
 has max_wire_version => (
     is        => 'ro',
     isa       => 'Int',
-    required  => 1,
-    default   => 2
+    default   => 3
 );
 
 has _use_write_cmd => ( 
@@ -336,6 +336,11 @@ sub BUILD {
     # deprecated syntax
     else {
         push @pairs, $self->host.":".$self->port;
+    }
+
+    # Warn if SSL desired and not supported
+    if ( $self->ssl && ! $self->_compile_flags->{'--ssl'} ) {
+        carp "MongoDB::MongoClient not compiled with SSL; trying to connect without it.\n";
     }
 
     # We cache our updated constructor arguments because we need them again for
@@ -862,12 +867,30 @@ sub rs_refresh {
 
 sub authenticate {
     my ($self, $dbname, $username, $password, $is_digest) = @_;
-    my $hash = $password;
-    
-    # create a hash if the password isn't yet encrypted
+    my $hash;
+
     if (!$is_digest) {
-        $hash = Digest::MD5::md5_hex("${username}:mongo:${password}");
+        $hash = Digest::MD5::md5_hex(encode("UTF-8", "${username}:mongo:${password}"));
     }
+    else {
+        $hash = $password;
+    }
+
+    # find out if we support SCRAM-SHA-1
+    my $result = eval {
+        $self->get_database( $self->db_name )->_try_run_command( { "ismaster" => 1 } );
+    };
+
+    if ( $result && exists($result->{maxWireVersion}) && $result->{maxWireVersion} >= 3 ) {
+        return $self->_authenticate_scram_sha_1( $dbname, $username, $hash );
+    }
+    else {
+        return $self->_authenticate_mongodb_cr( $dbname, $username, $hash );
+    }
+}
+
+sub _authenticate_mongodb_cr {
+    my ($self, $dbname, $username, $hash) = @_;
 
     # get the nonce
     my $db = $self->get_database($dbname);
@@ -886,10 +909,37 @@ sub authenticate {
              nonce => $nonce,
              key => $digest);
     $result = $db->run_command($login);
-    
+
     return $result;
 }
 
+sub _authenticate_scram_sha_1 {
+    my ($self, $dbname, $username, $hash) = @_;
+
+    my $client = Authen::SCRAM::Client->new(
+        username      => $username,
+        password      => $hash,
+        skip_saslprep => 1,
+    );
+
+    my ( $msg, $res, $sasl_resp, $conv_id, $done );
+    try {
+        $msg = encode_base64($client->first_msg, "");
+        $res = $self->_sasl_start( $msg, 'SCRAM-SHA-1', $dbname );
+        ( $sasl_resp, $conv_id, $done ) = @{$res}{qw/payload conversationId done/};
+        $msg = encode_base64($client->final_msg(decode_base64($sasl_resp)), "");
+        $res = $self->_sasl_continue( $msg, $conv_id, $dbname );
+        ( $sasl_resp, $conv_id, $done ) = @{$res}{qw/payload conversationId done/};
+        $client->validate(decode_base64($sasl_resp));
+        # might require an empty payload to complete SASL conversation
+        $res = $self->_sasl_continue( "", $conv_id, $dbname ) if !$done;
+    }
+    catch {
+        croak "Authentication failed: SCRAM-SHA-1 error: $_";
+    };
+
+    return $res;
+}
 
 sub fsync {
     my ($self, $args) = @_;
@@ -916,25 +966,26 @@ sub _w_want_safe {
     return 1;
 }
 
-sub _sasl_check { 
+sub _sasl_check {
     my ( $self, $res ) = @_;
 
     die "Invalid SASL response document from server:"
-        unless reftype $res eq reftype { };
+        unless ref $res eq 'HASH';
 
     if ( $res->{ok} != 1 ) { 
-        die "SASL authentication error: $res->{errmsg}";
+        croak "SASL authentication error: $res->{errmsg}";
     }
 
     return $res->{conversationId};
 }
 
-sub _sasl_start { 
-    my ( $self, $payload, $mechanism ) = @_;
+sub _sasl_start {
+    my ( $self, $payload, $mechanism, $database ) = @_;
+    $database ||= '$external';
 
     # warn "SASL start, payload = [$payload], mechanism = [$mechanism]\n";
 
-    my $res = $self->get_database( '$external' )->run_command( [ 
+    my $res = $self->get_database( $database )->run_command( [
         saslStart     => 1,
         mechanism     => $mechanism,
         payload       => $payload,
@@ -945,12 +996,13 @@ sub _sasl_start {
 }
 
 
-sub _sasl_continue { 
-    my ( $self, $payload, $conv_id ) = @_;
+sub _sasl_continue {
+    my ( $self, $payload, $conv_id, $database ) = @_;
+    $database ||= '$external';
 
     # warn "SASL continue, payload = [$payload], conv ID = [$conv_id]";
 
-    my $res = $self->get_database( '$external' )->run_command( [ 
+    my $res = $self->get_database( $database )->run_command( [
         saslContinue     => 1,
         conversationId   => $conv_id,
         payload          => $payload
@@ -1015,7 +1067,7 @@ MongoDB::MongoClient - A connection to a MongoDB server
 
 =head1 VERSION
 
-version v0.705.0.0
+version v0.706.0.0
 
 =head1 SYNOPSIS
 
@@ -1234,8 +1286,9 @@ in the C<passives> field, and arbiters are in the C<arbiters> field.
 
 This tells the driver that you are connecting to an SSL mongodb instance.
 
-This option will be ignored if the driver was not compiled with the SSL flag. You must
-also be using a database server that supports SSL.
+If the driver was not compiled with SSL support, a warning will be issued and
+the driver will attempt to connect without it. You must also be using a
+database server that supports SSL.
 
 The driver must be built as follows for SSL support:
 

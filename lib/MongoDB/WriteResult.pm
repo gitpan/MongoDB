@@ -19,7 +19,7 @@ package MongoDB::WriteResult;
 # ABSTRACT: MongoDB write result document
 
 use version;
-our $VERSION = 'v0.705.0.0';
+our $VERSION = 'v0.706.0.0';
 
 use Moose;
 use MongoDB::_Types;
@@ -229,7 +229,7 @@ MongoDB::WriteResult - MongoDB write result document
 
 =head1 VERSION
 
-version v0.705.0.0
+version v0.706.0.0
 
 =head1 SYNOPSIS
 

@@ -178,22 +178,21 @@ my $tied;
 
     my @indexes = $coll->get_indexes;
     is(scalar @indexes, 4, 'three custom indexes and the default _id_ index');
+    my ($foobarbaz) = grep { $_->{name} eq 'foo_1_bar_1_baz_1' } @indexes;
     is_deeply(
-        [sort keys %{ $indexes[1]->{key} }],
+        [sort keys %{ $foobarbaz->{key} }],
         [sort qw/foo bar baz/],
     );
+    my ($foobar) = grep { $_->{name} eq 'foo_1_bar_1' } @indexes;
     is_deeply(
-        [sort keys %{ $indexes[2]->{key} }],
+        [sort keys %{ $foobar->{key} }],
         [sort qw/foo bar/],
     );
 
-    $coll->drop_index($indexes[1]->{name});
+    $coll->drop_index('foo_1_bar_1_baz_1');
     @indexes = $coll->get_indexes;
     is(scalar @indexes, 3);
-    is_deeply(
-        [sort keys %{ $indexes[1]->{key} }],
-        [sort qw/foo bar/],
-    );
+    ok( (! scalar grep { $_->{name} eq 'foo_1_bar_1_baz_1' } @indexes), "right index deleted" );
 
     $coll->drop;
     ok(!$coll->get_indexes, 'no indexes after dropping');
@@ -215,12 +214,15 @@ my $tied;
     eval { $coll->ensure_index({foo => 1}, {unique => 1}) };
     like( $@, qr/E11000/, "got expected error creating unique index with dups" );
 
-    my $res = $coll->ensure_index({foo => 1}, {unique => 1, drop_dups => 1});
+    # prior to 2.7.5, drop_dups was respected
+    if ( $server_version < v2.7.5 ) {
+        my $res = $coll->ensure_index({foo => 1}, {unique => 1, drop_dups => 1});
 
-    if ( $server_version >= v2.6.0 ) {
-        ok $res->{ok};
-    } else {
-        ok(!defined $res);
+        if ( $server_version >= v2.6.0 ) {
+            ok $res->{ok};
+        } else {
+            ok(!defined $res);
+        }
     }
 
     $coll->drop;
@@ -621,7 +623,7 @@ SKIP: {
 {
 
     $ok = $coll->ensure_index({"x.y" => 1}, {"name" => "foo"});
-    my $index = $coll->_database->get_collection("system.indexes")->find_one({"name" => "foo"});
+    my ($index) = grep { $_->{name} eq 'foo' } $coll->get_indexes;
     ok($index);
     ok($index->{'key'});
     ok($index->{'key'}->{'x.y'});
@@ -637,11 +639,11 @@ SKIP: {
     is($coll->count, 20);
 
     eval { $coll->ensure_index({"y" => 1}, {"unique" => 1, "name" => "foo"}) };
-    my $index = $coll->_database->get_collection("system.indexes")->find_one({"name" => "foo"});
+    my ($index) = grep { $_->{name} eq 'foo' } $coll->get_indexes;
     ok(!$index);
 
     $coll->ensure_index({"y" => 1}, {"unique" => 1, "sparse" => 1, "name" => "foo"});
-    $index = $coll->_database->get_collection("system.indexes")->find_one({"name" => "foo"});
+    ($index) = grep { $_->{name} eq 'foo' } $coll->get_indexes;
     ok($index);
 
     $coll->drop;
@@ -673,8 +675,7 @@ subtest 'text indices' => sub {
         ok(!defined $res);
     }
 
-    my $syscoll = $testdb->get_collection('system.indexes');
-    my $text_index = $syscoll->find_one({name => 'testTextIndex'});
+    my ($text_index) = grep { $_->{name} eq 'testTextIndex' } $coll->get_indexes;
     is($text_index->{'default_language'}, 'spanish', 'default_language option works');
     is($text_index->{'language_override'}, 'language', 'language_override option works');
     is($text_index->{'weights'}->{'w1'}, 5, 'weights option works 1');
@@ -931,7 +932,7 @@ sub _check_parallel_results {
     local $Test::Builder::Level = $Test::Builder::Level+1;
 
     my %seen;
-    my $count;
+    my $count = 0;
     for my $i (0 .. $#cursors ) {
         my @chunk = $cursors[$i]->all;
         if ( $num_docs ) {

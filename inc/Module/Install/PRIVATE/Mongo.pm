@@ -5,8 +5,8 @@ package Module::Install::PRIVATE::Mongo;
 
 use Module::Install::Base;
 use Config;
-use Config::AutoConf;
-use Path::Tiny;
+use Config::AutoConf 0.22;
+use Path::Tiny 0.052;
 use File::Spec::Functions qw/catdir/;
 use Cwd; 
 
@@ -51,8 +51,11 @@ sub mongo {
 
     if ( $conf->{BSON_HAVE_CLOCK_GETTIME} ) {
         my $libs = $self->makemaker_args->{LIBS};
-        $libs = "" unless defined $libs;
-        $self->makemaker_args( LIBS => "$libs -lrt" );
+        $libs = [""] unless defined $libs;
+        for my $part ( @$libs) {
+          $part .= (length($part)  ? " " : "") . "-lrt";
+        }
+        $self->makemaker_args->{LIBS} = $libs;;
     }
 
     $self->makemaker_args( CCFLAGS => $ccflags );

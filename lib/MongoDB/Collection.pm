@@ -20,11 +20,12 @@ package MongoDB::Collection;
 # ABSTRACT: A MongoDB Collection
 
 use version;
-our $VERSION = 'v0.705.0.0';
+our $VERSION = 'v0.706.0.0';
 
 use Tie::IxHash;
 use Carp 'carp';
 use boolean;
+use Safe::Isa;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 use Moose;
@@ -514,7 +515,7 @@ sub ensure_index {
     return $res if $res->{ok};    
 
     # if not ok, no code or code 59 or code 13390 mean "command not available",
-    # per DRIVERS-103 and DRIVERS-132
+    # per DRIVERS-103 and DRIVERS-132; 13390 is old mongos per DRIVERS-149
     if ( ( not $res->{ok} )  && 
          ( not exists $res->{code} or $res->{code} == 59 or $res->{code} == 13390) ) { 
         $obj->Unshift( ns => $tmp_ns );     # restore ns to spec
@@ -627,6 +628,32 @@ sub drop_index {
 
 sub get_indexes {
     my ($self) = @_;
+
+    # try command style for 2.8+
+    my ($ok, @indexes) = try {
+        my $res = $self->_database->_try_run_command([listIndexes => $self->name]);
+        return 1, @{$res->{indexes}};
+    }
+    catch {
+        if ( $_->$_isa('MongoDB::DatabaseError') ) {
+            my $cmd_result = $_->result->result;
+            my $code = $cmd_result->{code};
+            if ( $code == 26 ) {
+                return 1, (); # empty
+            }
+            elsif ($code == 59 || $code == 13390 ) {
+                return 0;
+            }
+            elsif ( ($cmd_result->{errmsg} || '') =~ m{^no such cmd} ) {
+                return 0;
+            }
+        }
+        die $_;
+    };
+
+    return @indexes if $ok;
+
+    # fallback to earlier style
     return $self->_database->get_collection('system.indexes')->query({
         ns => $self->full_name,
     })->all;
@@ -669,7 +696,7 @@ MongoDB::Collection - A MongoDB Collection
 
 =head1 VERSION
 
-version v0.705.0.0
+version v0.706.0.0
 
 =head1 SYNOPSIS
 

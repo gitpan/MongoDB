@@ -8,7 +8,13 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
-eb166da PERL-406 Allow count methods to work with query hints
+891d435 PERL-409 add missing declarations for MinGW on Windows
+b54958a PERL-434 use listIndexes command
+8a2033f add devel test for PERL-433
+3d50371 PERL-433 use listCollections command
+de831f2 PERL-436 bump maxWireProtocolVersion
+ed9b1ea PERL-408 Implement SCRAM-SHA-1
+6f69c2f PERL-425 deprecate drop_dups
 
 EOC
 
@@ -24,7 +30,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.705.0.0(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.706.0.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;

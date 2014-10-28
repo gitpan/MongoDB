@@ -19,7 +19,7 @@ package MongoDB::OID;
 # ABSTRACT: A Mongo Object ID
 
 use version;
-our $VERSION = 'v0.705.0.0';
+our $VERSION = 'v0.706.0.0';
 
 use Moose;
 use MongoDB;
@@ -50,7 +50,7 @@ use namespace::clean -except => 'meta';
 #pod     my $id3 = MongoDB::OID->new($id1->value);
 #pod     my $id4 = MongoDB::OID->new($id1);
 #pod
-#pod Now C<$id1>, C<$id2>, $<$id3> and C<$id4> will have the same value.
+#pod Now C<$id1>, C<$id2>, C<$id3> and C<$id4> will have the same value.
 #pod
 #pod OID generation is thread safe.
 #pod
@@ -172,7 +172,7 @@ MongoDB::OID - A Mongo Object ID
 
 =head1 VERSION
 
-version v0.705.0.0
+version v0.706.0.0
 
 =head1 SYNOPSIS
 
@@ -195,7 +195,7 @@ constructor.  For example:
     my $id3 = MongoDB::OID->new($id1->value);
     my $id4 = MongoDB::OID->new($id1);
 
-Now C<$id1>, C<$id2>, $<$id3> and C<$id4> will have the same value.
+Now C<$id1>, C<$id2>, C<$id3> and C<$id4> will have the same value.
 
 OID generation is thread safe.
 

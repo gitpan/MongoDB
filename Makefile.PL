@@ -27,6 +27,7 @@ if ( $ENV{PERL_MONGODB_WITH_SASL} || grep { $_ eq '--sasl' } @ARGV ) {
 cc_lib_links( @cc_lib_links ) if @cc_lib_links;
 cc_optimize_flags( @cc_optimize_flags ) if @cc_optimize_flags;
 
+requires 'Authen::SCRAM::Client' => '0.003';
 requires 'Carp';
 requires 'Class::MOP::Class';
 requires 'DateTime' => '0.78';
@@ -53,7 +54,6 @@ test_requires 'DateTime::Tiny';
 test_requires 'Devel::Peek';
 test_requires 'File::Copy';
 test_requires 'File::Path';
-test_requires 'File::Slurp';
 test_requires 'File::Spec';
 test_requires 'File::Temp' => '0.17';
 test_requires 'FileHandle';

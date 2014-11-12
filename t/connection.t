@@ -31,10 +31,10 @@ use MongoDBTest qw/build_client get_test_db/;
 my $conn = build_client();
 my $testdb = get_test_db($conn);
 
-like(
+is(
     exception { MongoDB::MongoClient->new(host => 'localhost', port => 1, ssl => $ENV{MONGO_SSL}); },
-    qr/couldn't connect to server/,
-    'exception on connection failure'
+    undef,
+    'no exception on connection failure during topology scan'
 );
 
 SKIP: {
@@ -49,7 +49,7 @@ SKIP: {
     isa_ok($conn, 'MongoDB::MongoClient');
 
     is($conn->host, 'mongodb://localhost:27017', 'host default value');
-    is($conn->db_name, 'admin', 'db_name default value');
+    is($conn->db_name, '', 'db_name default value');
 
     # just make sure a couple timeouts work
     my $to = MongoDB::MongoClient->new('timeout' => 1, ssl => $ENV{MONGO_SSL});
@@ -69,25 +69,27 @@ SKIP: {
         'extra comma'
     );
 
-    is(
-        exception {
-            my $ip = 27020;
-            while ((exists $ENV{DB_PORT} && $ip eq $ENV{DB_PORT}) ||
-                (exists $ENV{DB_PORT2} && $ip eq $ENV{DB_PORT2})) {
-                $ip++;
-            }
-            my $conn2 = MongoDB::MongoClient->new("host" => "mongodb://localhost:".$ip.",localhost:".($ip+1).",localhost", ssl => $ENV{MONGO_SSL});
-        },
-        undef,
-        'last in line'
-    );
+    {
+        is(
+            exception {
+                my $ip = 27020;
+                while ((exists $ENV{DB_PORT} && $ip eq $ENV{DB_PORT}) ||
+                    (exists $ENV{DB_PORT2} && $ip eq $ENV{DB_PORT2})) {
+                    $ip++;
+                }
+                my $conn2 = MongoDB::MongoClient->new("host" => "mongodb://localhost:".$ip.",localhost:".($ip+1).",localhost", ssl => $ENV{MONGO_SSL});
+            },
+            undef,
+            'last in line'
+        );
+    }
 
     is(MongoDB::MongoClient->new('host' => 'mongodb://localhost/example_db')->db_name, 'example_db', 'connection uri database');
     is(MongoDB::MongoClient->new('host' => 'mongodb://localhost,/example_db')->db_name, 'example_db', 'connection uri database trailing comma');
     is(MongoDB::MongoClient->new('host' => 'mongodb://localhost/example_db?')->db_name, 'example_db', 'connection uri database trailing question');
-    is(MongoDB::MongoClient->new('host' => 'mongodb://localhost:27020,localhost:27021,localhost/example_db')->db_name, 'example_db', 'connection uri database, many hosts');
-    is(MongoDB::MongoClient->new('host' => 'mongodb://localhost/?')->db_name, 'admin', 'connection uri no database');
-    is(MongoDB::MongoClient->new('host' => 'mongodb://:@localhost/?')->db_name, 'admin', 'connection uri empty extras');
+    is(MongoDB::MongoClient->new('host' => 'mongodb://localhost,localhost:27020,localhost:27021/example_db')->db_name, 'example_db', 'connection uri database, many hosts');
+    is(MongoDB::MongoClient->new('host' => 'mongodb://localhost/?')->db_name, '', 'connection uri no database');
+    is(MongoDB::MongoClient->new('host' => 'mongodb://:@localhost/?')->db_name, '', 'connection uri empty extras');
 }
 
 # get_database and drop 
@@ -137,8 +139,7 @@ subtest "options" => sub {
 
         my $ssl = "true";
         my $timeout = 40000;
-        local $SIG{__WARN__} = sub {};
-        my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl=$ssl&connectTimeoutMS=$timeout", auto_connect => 0});
+        my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl=$ssl&connectTimeoutMS=$timeout"});
 
         is( $client->ssl, 1, "connect with ssl set" );
         is( $client->timeout, $timeout, "connection timeout set" );
@@ -147,9 +148,9 @@ subtest "options" => sub {
     subtest "invalid option value" => sub {
 
         like(
-            exception { MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl=", auto_connect => 0}) },
-            qr/expected key value pair/,
-            'key should have value'
+            exception { MongoDB::MongoClient->new({host => "mongodb://localhost/?ssl="}) },
+            qr/expected boolean/,
+            'key with invalid value'
         );
     };
 
@@ -158,7 +159,7 @@ subtest "options" => sub {
         my $w = 2;
         my $wtimeout = 200;
         my $j = "true";
-        my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?w=$w&wtimeoutMS=$wtimeout&journal=$j", auto_connect => 0});
+        my $client = MongoDB::MongoClient->new({host => "mongodb://localhost/?w=$w&wtimeoutMS=$wtimeout&journal=$j"});
 
         is( $client->w, $w, "write acknowledgement set" );
         is( $client->wtimeout, $wtimeout, "write acknowledgement timeout set" );
@@ -169,35 +170,22 @@ subtest "options" => sub {
 
 # query_timeout
 {
-    my $client = MongoDB::MongoClient->new(auto_connect => 0);
+    my $client = MongoDB::MongoClient->new();
     is($client->query_timeout, $MongoDB::Cursor::timeout, 'default query timeout');
 
     local $MongoDB::Cursor::timeout = 40;
-    $client = MongoDB::MongoClient->new(auto_connect => 0);
+    $client = MongoDB::MongoClient->new();
     is($client->query_timeout, 40, 'changed default query timeout');
-}
-
-# max_bson_size
-{
-    my $size = $conn->max_bson_size;
-    my $result = $conn->get_database( 'admin' )->run_command({buildinfo => 1});
-    if (exists $result->{'maxBsonObjectSize'}) {
-        is($size, $result->{'maxBsonObjectSize'}, 'max bson size');
-    }
-    else {
-        is($size, 4*1024*1024, 'max bson size');
-    }
 }
 
 # wire protocol versions
 
 {
-
-    is $conn->min_wire_version, 0, 'default min wire version';
-    is $conn->max_wire_version, 3, 'default max wire version';
+    is $conn->_min_wire_version, 0, 'default min wire version';
+    is $conn->_max_wire_version, 3, 'default max wire version';
 
     like(
-        exception { MongoDBTest::build_client( min_wire_version => 99, max_wire_version => 100) },
+        exception { MongoDBTest::build_client( _min_wire_version => 99, _max_wire_version => 100)->send_admin_command([is_master => 1]) },
         qr/Incompatible wire protocol/i,
         'exception on wire protocol'
     );

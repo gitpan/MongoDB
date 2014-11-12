@@ -12,15 +12,22 @@ do { my $x = {
                                     }
                     },
        'runtime' => {
+                      'recommends' => {
+                                        'IO::Socket::IP' => '0.25',
+                                        'IO::Socket::SSL' => '1.42',
+                                        'Mozilla::CA' => '20130114',
+                                        'Net::SSLeay' => '1.49'
+                                      },
                       'requires' => {
-                                      'Authen::SCRAM::Client' => '0.003',
+                                      'Authen::SCRAM::Client' => '0',
                                       'Carp' => '0',
-                                      'Class::MOP::Class' => '0',
                                       'DateTime' => '0.78',
                                       'Digest::MD5' => '0',
                                       'Encode' => '0',
                                       'Exporter' => '5.57',
                                       'IO::File' => '0',
+                                      'IO::Socket' => '0',
+                                      'List::Util' => '0',
                                       'MIME::Base64' => '0',
                                       'Moose' => '0',
                                       'Moose::Meta::Class' => '0',
@@ -40,9 +47,13 @@ do { my $x = {
                                       'namespace::clean' => '0',
                                       'overload' => '0',
                                       'perl' => '5.008',
+                                      're' => '0',
                                       'strict' => '0',
                                       'version' => '0',
                                       'warnings' => '0'
+                                    },
+                      'suggests' => {
+                                      'IO::Socket::SSL' => '1.56'
                                     }
                     },
        'test' => {
@@ -57,14 +68,14 @@ do { my $x = {
                                    'File::Spec' => '0',
                                    'File::Temp' => '0',
                                    'FileHandle' => '0',
-                                   'JSON' => '0',
+                                   'JSON::MaybeXS' => '0',
+                                   'Path::Tiny' => '0',
                                    'Test::Deep' => '0.111',
                                    'Test::Fatal' => '0',
                                    'Test::More' => '0.96',
                                    'Test::Warn' => '0',
                                    'bigint' => '0',
                                    'lib' => '0',
-                                   'threads' => '0',
                                    'utf8' => '0'
                                  }
                  }

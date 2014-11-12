@@ -20,7 +20,7 @@ package MongoDB::GridFS;
 # ABSTRACT: A file storage utility
 
 use version;
-our $VERSION = 'v0.707.0.0';
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
 use MongoDB::GridFS::File;
 use DateTime 0.78; # drops dependency on bug-prone Math::Round
@@ -426,7 +426,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 SYNOPSIS
 
@@ -578,7 +578,7 @@ Returns a list of the files in the database.
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -586,7 +586,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

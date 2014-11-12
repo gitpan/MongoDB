@@ -20,7 +20,7 @@ package MongoDB::Timestamp;
 # ABSTRACT: Replication timestamp
 
 use version;
-our $VERSION = 'v0.707.0.0';
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
 #pod =head1 NAME
 #pod
@@ -80,7 +80,7 @@ MongoDB::Timestamp - Replication timestamp
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 SYNOPSIS
 
@@ -109,7 +109,7 @@ Incrementing field.
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -117,7 +117,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

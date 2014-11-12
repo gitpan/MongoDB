@@ -30,7 +30,7 @@ MongoDB::Tutorial - Getting started with MongoDB
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 DESCRIPTION
 
@@ -298,7 +298,7 @@ Check out L<MongoDB::Examples> for more examples.
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -306,7 +306,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

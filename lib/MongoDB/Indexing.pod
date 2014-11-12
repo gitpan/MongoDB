@@ -30,7 +30,7 @@ MongoDB::Indexing - Indexing collections
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 CREATING AN INDEX
 
@@ -160,7 +160,7 @@ L<http://dochub.mongodb.org/core/geo>.
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -168,7 +168,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

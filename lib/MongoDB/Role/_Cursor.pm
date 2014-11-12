@@ -1,5 +1,5 @@
 #
-#  Copyright 2009-2013 MongoDB, Inc.
+#  Copyright 2014 MongoDB, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -14,22 +14,17 @@
 #  limitations under the License.
 #
 
+package MongoDB::Role::_Cursor;
 
-use strict;
-use warnings;
-use Test::More;
+# Role providing a cursor interface
 
-use MongoDB::Timestamp; # needed if db is being run as master
-use MongoDB;
-use DateTime;
-use DateTime::Tiny;
+use version;
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
-use lib "t/lib";
-use MongoDBTest qw/build_client get_test_db/;
+use MongoDB::_Types;
+use Moose::Role;
+use namespace::clean -except => 'meta';
 
-plan tests => 1;
+requires qw/all has_next info next/;
 
-# test that Connection delegates constructor params to MongoClient correctly
-my $conn = MongoDB::Connection->new( host => '127.0.0.1', auto_connect => 0 );
-
-is ( $conn->host, '127.0.0.1' );
+1;

@@ -18,6 +18,7 @@
 use strict;
 use warnings;
 use Test::More 0.96;
+use Test::Fatal;
 
 use Data::Dumper;
 
@@ -40,12 +41,11 @@ subtest "normal fsync" => sub {
 
 # Test async fsync.
 subtest "async fsync" => sub {
-    $ret = $conn->fsync({async => 1});
+    my $err = exception { $ret = $conn->fsync({async => 1}) };
     plan skip_all => 'async not supported'
-       if $ret =~ /exception:/ && $ret =~ /not supported/;
-
-    ok( ref $ret eq 'HASH', "fsync command ran without error" )
-        or diag $ret;
+       if $err && $err =~ /exception:.*not supported/;
+    is( $err, undef, "fsync command ran without error" )
+        or diag $err;
 
     if ( ref $ret eq 'HASH' ) {
         is($ret->{ok},              1, "fsync + async returned 'ok' => 1");
@@ -56,7 +56,7 @@ subtest "async fsync" => sub {
 # Test fsync with lock.
 subtest "fsync with lock" => sub {
     plan skip_all => "lock not supported through mongos"
-        if $conn->_is_mongos;
+        if $conn->topology_type eq 'Sharded';
 
     # Lock
     $ret = $conn->fsync({lock => 1});

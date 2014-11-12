@@ -19,9 +19,10 @@ package MongoDB::CommandResult;
 # ABSTRACT: MongoDB generic command result document
 
 use version;
-our $VERSION = 'v0.707.0.0';
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
 use Moose;
+use MongoDB::Error;
 use namespace::clean -except => 'meta';
 
 with 'MongoDB::Role::_LastError';
@@ -38,6 +39,18 @@ has result => (
     required => 1,
 );
 
+#pod =attr address
+#pod
+#pod Address ("host:port") of server that ran the command
+#pod
+#pod =cut
+
+has address => (
+    is       => 'ro',
+    isa      => 'HostAddress',
+    required => 1,
+);
+
 #pod =method last_errmsg
 #pod
 #pod Error string (if any) or the empty string if there was no error.
@@ -50,6 +63,30 @@ sub last_errmsg {
         return $self->result->{$err_key} if exists $self->result->{$err_key};
     }
     return "";
+}
+
+sub assert {
+    my ($self) = @_;
+    if ( ! $self->result->{ok} ) {
+        my $err = $self->last_errmsg;
+        my $code = $self->result->{code};
+        my $error_class;
+
+        # XXX should we be detecting write/writeConcern/etc errors here?
+        if ( $err =~ /^(?:not master|node is recovering)/ ) {
+            $error_class = "MongoDB::NotMasterError";
+        }
+        else {
+            $error_class = "MongoDB::DatabaseError";
+        }
+
+        $error_class->throw(
+            result => $self,
+            ( length($err)   ? ( message => $err )  : () ),
+            ( defined($code) ? ( code    => $code ) : () ),
+        );
+    }
+    return 1;
 }
 
 __PACKAGE__->meta->make_immutable;
@@ -68,7 +105,7 @@ MongoDB::CommandResult - MongoDB generic command result document
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 DESCRIPTION
 
@@ -80,6 +117,10 @@ available from the C<result> attribute of C<MongoDB::DatabaseError>.
 =head2 result
 
 Hash reference with the result of a database command
+
+=head2 address
+
+Address ("host:port") of server that ran the command
 
 =head1 METHODS
 
@@ -93,7 +134,7 @@ Error string (if any) or the empty string if there was no error.
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -101,7 +142,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

@@ -19,7 +19,7 @@ package MongoDB::DBRef;
 # ABSTRACT: Native DBRef support
 
 use version;
-our $VERSION = 'v0.707.0.0';
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
 use Carp 'croak';
 use Tie::IxHash;
@@ -117,7 +117,7 @@ MongoDB::DBRef - Native DBRef support
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 SYNOPSIS
 
@@ -193,7 +193,7 @@ database or collection concerned does not exist.
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -201,7 +201,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

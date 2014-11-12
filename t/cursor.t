@@ -18,6 +18,7 @@
 use strict;
 use warnings;
 use Test::More;
+use Test::Fatal;
 use Tie::IxHash;
 use version;
 
@@ -77,7 +78,7 @@ $testdb->drop;
 # limit
 {
     @values = $coll->query({}, { limit => 3, sort_by => { foo => 1 } })->all;
-    is(scalar @values, 3);
+    is(scalar @values, 3) or diag explain \@values;
     is ($values[0]->{foo}, -3);
     is ($values[1]->{foo}, 2);
     is ($values[2]->{foo}, 4);
@@ -163,17 +164,19 @@ $testdb->drop;
     $coll->drop;
     $coll->ensure_index({'sn'=>1});
 
-    my $sn = 0;
-    while ($sn <= 500) {
-      $coll->insert({sn => $sn++});
-    }
+    my $bulk = $coll->unordered_bulk;
+    $bulk->insert({sn => $_}) for 0 .. 5000;
+    $bulk->execute;
 
     $cursor = $coll->query;
     my $count = 0;
     while (my $doc = $cursor->next()) {
         $count++;
     }
-    is(501, $count);
+    is(5001, $count);
+
+    my @all = $coll->find->limit(3999)->all;
+    is( 0+@all, 3999, "got limited documents" );
 }
 
 # reset
@@ -191,7 +194,7 @@ $testdb->drop;
     my $exp = $cursor->explain;
 
     if ( $server_version >= v2.7.3 ) {
-        is ($exp->{executionStats}{nReturned}, 501, "count of items" );
+        is ($exp->{executionStats}{nReturned}, 5001, "count of items" );
         $cursor->reset;
         $exp = $cursor->limit(20)->explain;
         is ($exp->{executionStats}{nReturned}, 20, "explain with limit" );
@@ -200,7 +203,7 @@ $testdb->drop;
         is ($exp->{executionStats}{nReturned}, 20, "explain with negative limit" );
     }
     else {
-        is($exp->{'n'}, 501, 'explain');
+        is($exp->{'n'}, 5001, 'explain');
         is($exp->{'cursor'}, 'BasicCursor');
 
         $cursor->reset;
@@ -216,19 +219,14 @@ $testdb->drop;
 {
     $cursor->reset;
     my $hinted = $cursor->hint({'x' => 1});
-    is($hinted, $cursor);
+    is($hinted, $cursor, "hint returns self");
 
     $coll->drop;
 
     $coll->insert({'num' => 1, 'foo' => 1});
 
-    my $aok = 1;
-    eval {
-        $coll->query->hint({'num' => 1})->explain;
-        $aok = 0;
-    };
-
-    ok($@ =~ m/query error/);
+    like( exception { $coll->query->hint( { 'num' => 1 } )->explain },
+        qr/MongoDB::DatabaseError/, "check error on hint with explain" );
 }
 
 # slave_okay
@@ -246,6 +244,7 @@ $testdb->drop;
 # count
 {
     $coll->drop;
+    is ($coll->count, 0, "empty" );
     $coll->batch_insert([{'x' => 1}, {'x' => 1}, {'y' => 1}, {'x' => 1, 'z' => 1}]);
 
     is($coll->query->count, 4, 'count');
@@ -261,34 +260,34 @@ $testdb->drop;
 {
     $cursor = $coll->find();
 
-	$cursor = $cursor->tailable(1);
-	is($cursor->_tailable, 1);
-	$cursor = $cursor->tailable(0);
-	is($cursor->_tailable, 0);
+    $cursor = $cursor->tailable(1);
+    is($cursor->_query_options->{tailable}, 1);
+    $cursor = $cursor->tailable(0);
+    is($cursor->_query_options->{tailable}, !1);
 
     $cursor = $coll->find()->tailable(1);
-    is($cursor->_tailable, 1);
+    is($cursor->_query_options->{tailable}, 1);
     $cursor = $coll->find()->tailable(0);
-    is($cursor->_tailable, 0);
-    
+    is($cursor->_query_options->{tailable}, !1);
+
     #test is actual cursor
     $coll->drop;
     $coll->insert({"x" => 1});
     $cursor = $coll->find()->tailable(0);
     my $doc = $cursor->next;
     is($doc->{'x'}, 1);
-    
-	$cursor = $coll->find();
+
+    $cursor = $coll->find();
 
     $cursor->immortal(1);
-    is($cursor->immortal, 1);
+    is($cursor->_query_options->{immortal}, 1);
     $cursor->immortal(0);
-    is($cursor->immortal, 0);
+    is($cursor->_query_options->{immortal}, !1);
 
     $cursor->slave_okay(1);
-    is($cursor->slave_okay, 1);
+    is($cursor->_query_options->{slave_ok}, 1);
     $cursor->slave_okay(0);
-    is($cursor->slave_okay, 0);
+    is($cursor->_query_options->{slave_ok}, !1);
 }
 
 # explain
@@ -305,7 +304,7 @@ $testdb->drop;
 
     # cursor should be reset
     $doc = $cursor->next;
-    is($doc->{'x'}, 1);
+    is($doc->{'x'}, 1) or diag explain $doc;
 }
 
 # info
@@ -314,14 +313,15 @@ $testdb->drop;
     my $count = $coll->count;
 
     my $info = $cursor->info;
-    is($info->{'num'}, 0);
+    is_deeply( $info, {num => 0}, "before execution, info only has num field");
 
-    $cursor->has_next;
+    ok( $cursor->has_next, "cursor executed and has results" );
     $info = $cursor->info;
+    is($info->{'num'}, 1);
     is($info->{'at'}, 0);
     is($info->{'num'}, $count);
     is($info->{'start'}, 0);
-    is($info->{'cursor_id'}, 0);
+    is($info->{'cursor_id'}, scalar("\0" x 8));
 
     $cursor->next;
     $info = $cursor->info;

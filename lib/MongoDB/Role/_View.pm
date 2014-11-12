@@ -19,7 +19,7 @@ package MongoDB::Role::_View;
 # Role providing a query document
 
 use version;
-our $VERSION = 'v0.707.0.0';
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
 use MongoDB::_Types;
 use Moose::Role;

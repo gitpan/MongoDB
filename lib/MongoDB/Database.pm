@@ -20,11 +20,12 @@ package MongoDB::Database;
 # ABSTRACT: A MongoDB Database
 
 use version;
-our $VERSION = 'v0.707.0.0';
+our $VERSION = 'v0.999.998.1'; # TRIAL
 
 use MongoDB::CommandResult;
 use MongoDB::Error;
 use MongoDB::GridFS;
+use MongoDB::_Query;
 use Carp 'carp';
 use boolean;
 use Moose;
@@ -45,25 +46,27 @@ has name => (
 
 
 sub collection_names {
-    my ($self) = @_;
-
-    # try command style for 2.8+
-    my ($ok, @names) = try {
-        my $res = $self->_try_run_command([listCollections => 1]);
-        my @list = map { $_->{name} } @{$res->{collections}};
-        return 1, @list;
+    my ($self)   = @_;
+    my $db_name  = $self->name;
+    my $variants = {
+        0 => sub {
+            my ( $client, $link ) = @_;
+            my $ns = "$db_name.system.namespaces";
+            my $query = MongoDB::_Query->new( spec => {} );
+            my $result =
+              $client->_try_operation('_send_query', $link, $ns, $query->spec, undef, 0, 0, 0, undef, $client );
+            return grep { not( index( $_, '$' ) >= 0 && index( $_, '.oplog.$' ) < 0 ) }
+              map { substr $_->{name}, length($db_name) + 1 } $result->all;
+        },
+        3 => sub {
+            my ( $client, $link ) = @_;
+            my $cmd = Tie::IxHash->new( listCollections => 1 );
+            my $result = $client->_try_operation('_send_command', $link, $db_name, $cmd );
+            return map { $_->{name} } @{ $result->result->{collections} };
+        },
     };
-    return @names if $ok;
-
-    # fallback to earlier style
-    my $it = $self->get_collection('system.namespaces')->query({});
-    return grep { 
-        not ( index( $_, '$' ) >= 0 && index( $_, '.oplog.$' ) < 0 ) 
-    } map { 
-        substr $_->{name}, length( $self->name ) + 1 
-    } $it->all;
+    return $self->_client->send_versioned_read($variants);
 }
-
 
 sub get_collection {
     my ($self, $collection_name) = @_;
@@ -108,21 +111,20 @@ sub last_error {
 
 sub run_command {
     my ($self, $command) = @_;
-    my $obj = $self->get_collection('$cmd')->find_one($command);
-    return $obj if $obj->{ok};
-    return exists $obj->{errmsg} ? $obj->{errmsg} : $obj->{'$err'};
+
+    my $obj = $self->_client->send_command( $self->name, $command );
+
+    return $obj->result;
 }
 
 # same as run_command but throws an exception on error; private
 # for now until exception handling is overhauled
 sub _try_run_command {
     my ($self, $command) = @_;
-    my $obj = $self->get_collection('$cmd')->find_one($command);
-    return $obj if $obj->{ok};
-    MongoDB::DatabaseError->throw(
-        message => $obj->{errmsg} || $obj->{'$err'},
-        result => MongoDB::CommandResult->new(result => $obj),
-    );
+
+    my $obj = $self->_client->send_command( $self->name, $command );
+
+    return $obj->result;
 }
 
 sub eval {
@@ -160,7 +162,7 @@ MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version v0.707.0.0
+version v0.999.998.1
 
 =head1 SYNOPSIS
 
@@ -169,7 +171,7 @@ The MongoDB::Database class accesses to a database.
     # accesses the foo database
     my $db = $connection->foo;
 
-You can also access databases with the L<MongoDB::Connection/"get_database($name)">
+You can also access databases with the L<MongoDB::MongoClient/"get_database($name)">
 method.
 
 =head1 NAME
@@ -233,7 +235,7 @@ the following:
 =item w
 
 Guarantees that the previous operation will be replicated to C<w> servers before
-this command will return success. See C<MongoDB::Connection::w> for more
+this command will return success. See C<MongoDB::MongoClient> for more
 information.
 
 =item wtimeout
@@ -331,22 +333,17 @@ occurred).
 
 =back
 
-See L<MongoDB::Connection/w> for more information.
+See L<MongoDB::MongoClient/w> for more information.
 
 =head2 run_command ($command)
 
-    my $result = $database->run_command([ some_command => 1 ]);
+    my $result = $database->run_command({ some_command => 1 });
 
-Runs a database command.  The input should be an array reference of key-value
-pairs or a L<Tie::IxHash> object with the command name as the first key.  The
-use of a hash reference will only reliably work for commands without additional
-parameters.
+Runs a database command. Returns a string with the error message if the
+command fails. Returns the result of the command (a hash reference) on success.
+For a list of possible database commands, run:
 
-It returns a string with the error message if the command fails.  It returns
-the result of the command (a hash reference) on success.  For a list of
-possible database commands, run:
-
-    my $commands = $db->run_command([listCommands => 1]);
+    my $commands = $db->run_command({listCommands => 1});
 
 There are a few examples of database commands in the
 L<MongoDB::Examples/"DATABASE COMMANDS"> section.
@@ -377,7 +374,7 @@ L<http://www.mongodb.org/display/DOCS/Server-side+Code+Execution#Server-sideCode
 
 =item *
 
-David Golden <david.golden@mongodb.org>
+David Golden <david@mongodb.com>
 
 =item *
 
@@ -385,7 +382,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.org>
+Kristina Chodorow <kristina@mongodb.com>
 
 =item *
 

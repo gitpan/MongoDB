@@ -11,22 +11,6 @@ author 'David.Golden <david.golden@mongodb.com>';
 license 'Apache';
 all_from 'lib/MongoDB.pm';
 
-my (@cc_lib_links, @cc_optimize_flags);
-
-if ( $ENV{PERL_MONGODB_WITH_SSL} || grep { $_ eq '--ssl' } @ARGV ) {
-    push @cc_lib_links, 'ssl', 'crypto';
-    push @cc_optimize_flags, '-DMONGO_SSL';
-}
-
-if ( $ENV{PERL_MONGODB_WITH_SASL} || grep { $_ eq '--sasl' } @ARGV ) {
-    push @cc_lib_links, 'gsasl';
-    push @cc_optimize_flags, '-DMONGO_SASL';
-}
-
-
-cc_lib_links( @cc_lib_links ) if @cc_lib_links;
-cc_optimize_flags( @cc_optimize_flags ) if @cc_optimize_flags;
-
 requires 'Authen::SCRAM::Client' => '0.003';
 requires 'Carp';
 requires 'Class::MOP::Class';
@@ -57,7 +41,7 @@ test_requires 'File::Path';
 test_requires 'File::Spec';
 test_requires 'File::Temp' => '0.17';
 test_requires 'FileHandle';
-test_requires 'JSON' => '2';
+test_requires 'JSON::MaybeXS' => '1.002005';
 test_requires 'Test::Deep' => 0.111;
 test_requires 'Test::Fatal';
 test_requires 'Test::More' => 0.96;
@@ -68,10 +52,7 @@ mongo;
 
 repository 'git://github.com/mongodb/mongo-perl-driver.git';
 
-
-if ($Config::Config{useithreads}) {
-    tests 't/*.t t/threads/*.t';
-}
+tests_recursive;
 
 WriteAll;
 

@@ -20,7 +20,7 @@ package MongoDB::BSON::Binary;
 # ABSTRACT: Binary type
 
 use version;
-our $VERSION = 'v0.706.0.0';
+our $VERSION = 'v0.707.0.0';
 
 use Moose;
 use namespace::clean -except => 'meta';
@@ -155,7 +155,7 @@ MongoDB::BSON::Binary - Binary type
 
 =head1 VERSION
 
-version v0.706.0.0
+version v0.707.0.0
 
 =head1 SYNOPSIS
 

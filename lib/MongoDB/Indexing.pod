@@ -30,7 +30,7 @@ MongoDB::Indexing - Indexing collections
 
 =head1 VERSION
 
-version v0.706.0.0
+version v0.707.0.0
 
 =head1 CREATING AN INDEX
 

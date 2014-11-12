@@ -20,7 +20,7 @@ package MongoDB::GridFS;
 # ABSTRACT: A file storage utility
 
 use version;
-our $VERSION = 'v0.706.0.0';
+our $VERSION = 'v0.707.0.0';
 
 use MongoDB::GridFS::File;
 use DateTime 0.78; # drops dependency on bug-prone Math::Round
@@ -121,15 +121,8 @@ sub _build_chunks {
 # If they are not found, they will be created.
 sub BUILD {
     my ($self) = @_;
-   
-    # check for the required indexes in the system.indexes collection
-    my $count = $self->_database->get_collection('system.indexes')->count({key=>{filename => 1}});
-    $count   += $self->_database->get_collection('system.indexes')->count({key=>{files_id => 1, n => 1}});
-    
-    # if we don't have the required indexes, create them now.
-    if ($count < 2){
-       $self->_ensure_indexes();
-    }
+    $self->_ensure_indexes();
+    return;
 }
 
 
@@ -433,7 +426,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version v0.706.0.0
+version v0.707.0.0
 
 =head1 SYNOPSIS
 

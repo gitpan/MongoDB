@@ -20,15 +20,11 @@ use warnings;
 use Test::More 0.96;
 use Test::Fatal;
 use Test::Warn;
-use Test::Deep qw/!blessed/;
 
 use utf8;
-use Data::Types qw(:float);
 use Tie::IxHash;
 use Encode qw(encode decode);
 use MongoDB::Timestamp; # needed if db is being run as master
-use MongoDB::Error;
-use MongoDB::Code;
 
 use MongoDB;
 
@@ -90,7 +86,7 @@ my $tied;
     is($coll->count, 1);
 }
 
-# rename
+# rename 
 {
     my $newcoll = $coll->rename('test_collection.rename');
     is($newcoll->name, 'test_collection.rename', 'rename');
@@ -109,7 +105,7 @@ my $tied;
     is($coll->count({ 'with.a' => 'reference' }), 1, 'inner obj count');
 }
 
-# find_one
+# find_one 
 {
     $obj = $coll->find_one;
     is($obj->{mongo} => 'hacker', 'find_one');
@@ -121,163 +117,12 @@ my $tied;
     is($obj->{just}, "an\xE4oth\0er");
 }
 
-# find_one MaxTimeMS
-{
-    my $err_re = qr/must be non-negative/;
-    eval { $coll->find_one({}, {}, { max_time_ms => -1 }) };
-    like( $@, $err_re, "find_one sets max_time_ms");
-}
-
-# find_one invalid option
-{
-    my $err_re = qr/max_slime_ms is not/;
-    eval { $coll->find_one({}, {}, { max_slime_ms => -1 }) };
-    like( $@, $err_re, "max_slime_ms is not a Cursor method");
-}
-
 # validate and remove
 {
     is( exception { $coll->validate }, undef, 'validate' );
 
     $coll->remove($obj);
     is($coll->count, 0, 'remove() deleted everything (won\'t work on an old version of Mongo)');
-}
-
-# basic indexes
-{
-    my $res;
-
-    $coll->drop;
-    for (my $i=0; $i<10; $i++) {
-        $coll->insert({'x' => $i, 'z' => 3, 'w' => 4});
-        $coll->insert({'x' => $i, 'y' => 2, 'z' => 3, 'w' => 4});
-    }
-
-    $coll->drop;
-    ok(!$coll->get_indexes, 'no indexes yet');
-
-    my $indexes = Tie::IxHash->new(foo => 1, bar => 1, baz => 1);
-    $res = $coll->ensure_index($indexes);
-    if ( $server_version >= v2.6.0 ) {
-        ok $res->{ok};
-    } else {
-        ok($res);
-    }
-
-    my $err = $testdb->last_error;
-    is($err->{ok}, 1);
-    is($err->{err}, undef);
-
-    $indexes = Tie::IxHash->new(foo => 1, bar => 1);
-    $res = $coll->ensure_index($indexes);
-
-    if ( $server_version >= v2.6.0 ) {
-        ok $res->{ok};
-    } else {
-        ok($res);
-    }
-
-    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
-    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
-    is($coll->count, 2);
-
-    $res = $coll->ensure_index({boo => 1}, {unique => 1});
-
-    if ( $server_version >= v2.6.0 ) {
-        ok $res->{ok};
-    } else {
-        ok($res);
-    }
-
-    eval { $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2}) };
-
-    is($coll->count, 2, 'unique index');
-
-    my @indexes = $coll->get_indexes;
-    is(scalar @indexes, 4, 'three custom indexes and the default _id_ index');
-    my ($foobarbaz) = grep { $_->{name} eq 'foo_1_bar_1_baz_1' } @indexes;
-    is_deeply(
-        [sort keys %{ $foobarbaz->{key} }],
-        [sort qw/foo bar baz/],
-    );
-    my ($foobar) = grep { $_->{name} eq 'foo_1_bar_1' } @indexes;
-    is_deeply(
-        [sort keys %{ $foobar->{key} }],
-        [sort qw/foo bar/],
-    );
-
-    $coll->drop_index('foo_1_bar_1_baz_1');
-    @indexes = $coll->get_indexes;
-    is(scalar @indexes, 3);
-    ok( (! scalar grep { $_->{name} eq 'foo_1_bar_1_baz_1' } @indexes), "right index deleted" );
-
-    $coll->drop;
-    ok(!$coll->get_indexes, 'no indexes after dropping');
-
-    # make sure this still works
-    $coll->ensure_index({"foo" => 1});
-    @indexes = $coll->get_indexes;
-    is(scalar @indexes, 2, '1 custom index and the default _id_ index');
-    $coll->drop;
-}
-
-# test ensure index with drop_dups
-{
-
-    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
-    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
-    is($coll->count, 2);
-
-    like(
-        exception { $coll->ensure_index({foo => 1}, {unique => 1}) },
-        qr/E11000/,
-        "got expected error creating unique index with dups"
-    );
-
-    # prior to 2.7.5, drop_dups was respected
-    if ( $server_version < v2.7.5 ) {
-        my $res = $coll->ensure_index({foo => 1}, {unique => 1, drop_dups => 1});
-
-        if ( $server_version >= v2.6.0 ) {
-            ok $res->{ok};
-        } else {
-            ok($res);
-        }
-    }
-
-    $coll->drop;
-}
-
-
-# test new form of ensure index
-{
-    my $res;
-    $res = $coll->ensure_index({foo => 1, bar => -1, baz => 1});
-
-    if ( $server_version >= v2.6.0 ) {
-        ok $res->{ok};
-    } else {
-        ok($res);
-    }
-
-    $res = $coll->ensure_index([foo => 1, bar => 1]);
-
-    if ( $server_version >= v2.6.0 ) {
-        ok $res->{ok};
-    } else {
-        ok($res);
-    }
-
-    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 1});
-    $coll->insert({foo => 1, bar => 1, baz => 1, boo => 2});
-    is($coll->count, 2);
-
-    # unique index
-    $coll->ensure_index({boo => 1}, {unique => 1});
-    eval { $coll->insert({foo => 3, bar => 3, baz => 3, boo => 2}) };
-    is($coll->count, 2, 'unique index');
-
-    $coll->drop;
 }
 
 # doubles
@@ -294,7 +139,7 @@ my $tied;
     $object->{'price'} = 123.19;
     $coll->insert($object);
     my $auto = $coll->find_one;
-    ok(is_float($auto->{'price'}));
+    like($auto->{'price'}, qr/^123\.\d+/, "round trip float looks like float");
     ok(abs($auto->{'price'} - $object->{'price'}) < .000000001);
 }
 
@@ -394,7 +239,7 @@ my $tied;
 
     $coll->drop;
     $coll->batch_insert([{"x" => 1}, {"x" => 1}, {"x" => 1}]);
-    $coll->remove( { "x" => 1 }, { just_one => 1 } );
+    $coll->remove({"x" => 1}, 1);
     is ($coll->count, 2, 'remove just one');
 }
 
@@ -540,10 +385,14 @@ SKIP: {
 {
     $coll->drop;
     $coll->insert({_id => 1}, {safe => 1});
-    my $err = exception { $coll->insert({_id => 1}, {safe => 1}) };
-    ok( $err, "got error" );
-    isa_ok( $err, 'MongoDB::DatabaseError', "duplicate insert error" );
-    like( $err->message, qr/duplicate key/, 'error was duplicate key exception')
+    eval {$coll->insert({_id => 1}, {safe => 1})};
+    ok($@ and $@ =~ /^E11000/, 'duplicate key exception');
+
+  SKIP: {
+      skip "the version of the db you're running doesn't give error codes, you may wish to consider upgrading", 1 if !exists $testdb->last_error->{code};
+
+      is($testdb->last_error->{code}, 11000);
+    }
 }
 
 # safe update
@@ -553,17 +402,11 @@ SKIP: {
     $coll->insert( {name => 'Alice'} );
     $coll->insert( {name => 'Bob'} );
 
-    my $err = exception { $coll->update( { name => 'Alice'}, { '$set' => { name => 'Bob' } }, { safe => 0 } ) };
-    is($err, undef, "bad update with safe => 0: no error");
-
     for my $h ( undef, { safe => 1 } ) {
-        $err = exception { $coll->update( { name => 'Alice'}, { '$set' => { name => 'Bob' } }, $h ) };
+        my $err = exception { $coll->update( { name => 'Alice'}, { '$set' => { name => 'Bob' } }, $h ) };
         my $case = $h ? "explicit" : "default";
-        ok( $err, "bad update with $case safe gives error" );
-        like( $err->message, qr/duplicate key/, 'error was duplicate key exception');
-        ok( my $ok = $coll->update( { name => 'Alice' }, { '$set' => { age => 23 } }, $h ), "did legal update" );
-        isa_ok( $ok, "MongoDB::WriteResult" );
-        is( exception { $ok->assert }, undef, "legal update with $case safe had no error" );
+        ok( $err, "bad update with $case safe gives error");
+        ok( $coll->update( { name => 'Alice' }, { '$set' => { age => 23 } }, $h ), "did legal update" );
     }
 }
 
@@ -678,7 +521,7 @@ subtest 'text indices' => sub {
 
     if ( $server_version >= v2.6.0 ) {
         ok $res->{ok};
-    } else {
+    } else { 
         ok(!defined $res);
     }
 
@@ -693,7 +536,7 @@ subtest 'text indices' => sub {
     # 2.6 changed the response format for text search results, and deprecated
     # the 'text' command. On 2.4, mongos doesn't report the default language
     # and provides stats per shard instead of in total.
-    if ( ! ( $server_version >= v2.6.0 || $conn->topology_type eq 'Sharded') ) {
+    if ( ! ( $server_version >= v2.6.0 || $conn->_is_mongos) ) {
         is($search->{'language'}, 'spanish', 'text search uses preferred language');
         is($search->{'stats'}->{'nfound'}, 10, 'correct number of results found');
     }
@@ -748,7 +591,7 @@ subtest 'text indices' => sub {
     $coll->drop;
 
     $coll->insert( { name => "find_and_modify_test", value => 46 } );
-    my $new = $coll->find_and_modify( { query  => { name => "find_and_modify_test" },
+    my $new = $coll->find_and_modify( { query  => { name => "find_and_modify_test" }, 
                                         update => { '$set' => { value => 57 } },
                                         new    => 1 } );
 
@@ -763,7 +606,7 @@ subtest 'text indices' => sub {
     $coll->drop;
 }
 
-# aggregate
+# aggregate 
 subtest "aggregation" => sub {
     plan skip_all => "Aggregation framework unsupported on MongoDB $server_version"
         unless $server_version >= v2.2.0;
@@ -797,36 +640,36 @@ subtest "aggregation cursors" => sub {
     plan skip_all => "Aggregation cursors unsupported on MongoDB $server_version"
         unless $server_version >= v2.5.0;
 
-    for( 1..20 ) {
+    for( 1..20 ) { 
         $coll->insert( { count => $_ } );
     }
 
     $cursor = $coll->aggregate( [ { '$match' => { count => { '$gt' => 0 } } } ], { cursor => 1 } );
 
-    isa_ok $cursor, 'MongoDB::QueryResult';
+    isa_ok $cursor, 'MongoDB::Cursor';
     is $cursor->started_iterating, 1;
-    is( ref( $cursor->_docs ), ref [ ] );
-    is $cursor->_doc_count, 20, "document count cached in cursor";
+    is( ref( $cursor->_agg_first_batch ), ref [ ] );
+    is $cursor->_agg_batch_size, 20;
 
-    for( 1..20 ) {
+    for( 1..20 ) { 
         my $doc = $cursor->next;
         is( ref( $doc ), ref { } );
         is $doc->{count}, $_;
-        is $cursor->_doc_count, ( 20 - $_ );
+        is $cursor->_agg_batch_size, ( 20 - $_ );
     }
 
     # make sure we can transition to a "real" cursor
     $cursor = $coll->aggregate( [ { '$match' => { count => { '$gt' => 0 } } } ], { cursor => { batchSize => 10 } } );
 
-    isa_ok $cursor, 'MongoDB::QueryResult';
+    isa_ok $cursor, 'MongoDB::Cursor';
     is $cursor->started_iterating, 1;
-    is( ref( $cursor->_docs), ref [ ] );
-    is $cursor->_doc_count, 10, "doc count correct";
+    is( ref( $cursor->_agg_first_batch ), ref [ ] );
+    is $cursor->_agg_batch_size, 10;
 
-    for( 1..20 ) {
+    for( 1..20 ) { 
         my $doc = $cursor->next;
-        isa_ok( $doc, 'HASH' );
-        is $doc->{count}, $_, "doc count field is $_";
+        is( ref( $doc ), ref { } );
+        is $doc->{count}, $_;
     }
 
     $coll->drop;
@@ -866,7 +709,7 @@ subtest "aggregation explain" => sub {
         $coll->insert( { count => $_ } );
     }
 
-    my $result = $coll->aggregate( [ { '$match' => { count => { '$gt' => 0 } } }, { '$sort' => { count => 1 } } ],
+    my $result = $coll->aggregate( [ { '$match' => { count => { '$gt' => 0 } } }, { '$sort' => { count => 1 } } ], 
                                    { explain => 1 } );
 
     is( ref( $result ), 'HASH', "aggregate with explain returns a hashref" );
@@ -879,22 +722,82 @@ subtest "aggregation explain" => sub {
     $coll->drop;
 };
 
-subtest "deep update" => sub {
-    $coll->drop;
-    $coll->insert( { _id => 1 } );
+# parallel_scan
+subtest "parallel scan" => sub {
+    plan skip_all => "Parallel scan not supported before MongoDB 2.6"
+        unless $server_version >= v2.6.0;
+    plan skip_all => "Parallel scan not supported on mongos"
+        if $server_type eq 'Mongos';
 
-    $coll->update( { _id => 1 }, { '$set' => { 'x.y' => 42 } } );
+    my $num_docs = 2000;
 
-    my $doc = $coll->find_one( { _id => 1 } );
-    is( $doc->{x}{y}, 42, "deep update worked" );
+    for ( 1..$num_docs ) {
+        $coll->insert( { _id => $_ } );
+    }
 
-    like(
-        exception { $coll->update( { _id => 1 }, { 'p.q' => 23 } ) },
-        qr/documents for storage cannot contain/,
-        "replace with dots in field dies"
-    );
+    my $err_re = qr/must be a positive integer between 1 and 10000/;
+
+    eval { $coll->parallel_scan };
+    like( $@, $err_re, "parallel_scan() throws error");
+
+    for my $i ( 0, -1, 10001 ) {
+        eval { $coll->parallel_scan($i) };
+        like( $@, $err_re, "parallel_scan($i) throws error" );
+    }
+
+    my $max = 3;
+    my @cursors = $coll->parallel_scan($max);
+    ok( scalar @cursors <= $max, "parallel_scan($max) returned <= $max cursors" );
+
+    for my $method ( qw/reset count explain/ ) {
+        eval { $cursors[0]->$method };
+        like( $@, qr/cannot $method a parallel scan/, "$method on parallel scan cursor throws error" );
+    }
+
+    _check_parallel_results( $num_docs, @cursors );
+
+    # read preference
+    subtest "replica set" => sub {
+        plan skip_all => 'needs a replicaset'
+            unless $server_type eq 'RSPrimary';
+
+        my $conn2 = MongoDBTest::build_client();
+        $conn2->read_preference(MongoDB::MongoClient->SECONDARY_PREFERRED);
+
+        my @cursors = $coll->parallel_scan($max);
+        _check_parallel_results( $num_docs, @cursors );
+    };
+
+    # empty collection
+    subtest "empty collection" => sub {
+        $coll->remove({});
+        my @cursors = $coll->parallel_scan($max);
+        _check_parallel_results( 0, @cursors );
+    }
 
 };
+
+sub _check_parallel_results {
+    my ($num_docs, @cursors) = @_;
+    local $Test::Builder::Level = $Test::Builder::Level+1;
+
+    my %seen;
+    my $count = 0;
+    for my $i (0 .. $#cursors ) {
+        my @chunk = $cursors[$i]->all;
+        if ( $num_docs ) {
+            ok( @chunk > 0, "cursor $i had some results" );
+        }
+        else {
+            is( scalar @chunk, 0, "cursor $i had no results" );
+        }
+        $seen{$_}++ for map { $_->{_id} } @chunk;
+        $count += @chunk;
+    }
+    is( $count, $num_docs, "cursors returned right number of docs" );
+    is_deeply( [sort { $a <=> $b } keys %seen], [ 1 .. $num_docs], "cursors returned all results" );
+
+}
 
 subtest "count w/ hint" => sub {
 
@@ -934,33 +837,5 @@ subtest "count w/ hint" => sub {
 
     is( $coll->count( {}, { hint => 'x_1' } ), 2, 'hint on empty sparse index');
 };
-
-my $js_str = 'function() { return this.a > this.b }';
-my $js_obj = MongoDB::Code->new( code => $js_str );
-
-for my $criteria ( $js_str, $js_obj ) {
-    my $type = ref($criteria) || 'string';
-    subtest "query with \$where as $type" => sub {
-        $coll->drop;
-        $coll->insert( { a => 1, b => 1, n => 1 } );
-        $coll->insert( { a => 2, b => 1, n => 2 } );
-        $coll->insert( { a => 3, b => 1, n => 3 } );
-        $coll->insert( { a => 0, b => 1, n => 4 } );
-        $coll->insert( { a => 1, b => 2, n => 5 } );
-        $coll->insert( { a => 2, b => 3, n => 6 } );
-
-        my @docs = $coll->find( { '$where' => $criteria } )->sort( { n => 1 } )->all;
-        is( scalar @docs, 2, "correct count a > b" )
-          or diag explain @docs;
-        cmp_deeply(
-            \@docs,
-            [
-                { _id => ignore(), a => 2, b => 1, n => 2 },
-                { _id => ignore(), a => 3, b => 1, n => 3 }
-            ],
-            "javascript query correct"
-        );
-    };
-}
 
 done_testing;

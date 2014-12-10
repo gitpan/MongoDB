@@ -15,21 +15,15 @@
  */
 
 #include "perl_mongo.h"
+#include "mongo_link.h"
 
-MODULE = MongoDB  PACKAGE = MongoDB::BSON
+MODULE = MongoDB::BSON  PACKAGE = MongoDB::BSON
 
 PROTOTYPES: DISABLE
 
-BOOT:
-    perl_mongo_init();
-
 void
-_decode_bson(msg, dt_type, inflate_dbrefs, inflate_regexps, client)
-        SV *msg
-        SV *dt_type
-        int inflate_dbrefs
-        int inflate_regexps
-        SV *client
+decode_bson(sv)
+         SV *sv
 
     PREINIT:
         char * data;
@@ -39,37 +33,24 @@ _decode_bson(msg, dt_type, inflate_dbrefs, inflate_regexps, client)
         STRLEN length;
 
     PPCODE:
-        data = SvPV_nolen(msg);
-        length = SvCUR(msg);
+        data = SvPV_nolen(sv);
+        length = SvCUR(sv);
 
         reader = bson_reader_new_from_data((uint8_t *)data, length);
 
         while ((bson = bson_reader_read(reader, &reached_eof))) {
-          XPUSHs(sv_2mortal(perl_mongo_bson_to_sv(bson, (SvOK(dt_type) ? SvPV_nolen(dt_type) : NULL), inflate_dbrefs, inflate_regexps, client)));
+          XPUSHs(sv_2mortal(perl_mongo_bson_to_sv(bson, "DateTime", 1, 1, newSV(0))));
         }
 
         bson_reader_destroy(reader);
 
 void
-_encode_bson(obj, clean_keys)
+encode_bson(obj)
          SV *obj
-         int clean_keys
     PREINIT:
          bson_t * bson;
     PPCODE:
          bson = bson_new();
-         perl_mongo_sv_to_bson(bson, obj, clean_keys, NO_PREP);
+         perl_mongo_sv_to_bson(bson, obj, NO_PREP);
          XPUSHs(sv_2mortal(newSVpvn((const char *)bson_get_data(bson), bson->len)));
          bson_destroy(bson);
-
-SV *
-generate_oid ()
-    PREINIT:
-        bson_oid_t boid;
-        char oid[25];
-    CODE:
-        bson_oid_init(&boid, NULL);
-        bson_oid_to_string(&boid, oid);
-        RETVAL = newSVpvn(oid, 24);
-    OUTPUT:
-        RETVAL

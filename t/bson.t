@@ -24,7 +24,6 @@ use MongoDB;
 use MongoDB::OID;
 use boolean;
 use DateTime;
-use Data::Types qw(:float);
 use Encode;
 use Tie::IxHash;
 use Test::Fatal;
@@ -39,26 +38,26 @@ my $testdb = get_test_db(build_client());
 my $c = $testdb->get_collection('bar');
 
 # relloc
-subtest "realloc" => sub {
+{
     $c->drop;
 
     my $long_str = "y" x 8184;
     $c->insert({'text' => $long_str});
     my $result = $c->find_one;
     is($result->{'text'}, $long_str, 'realloc');
-};
+}
 
 # id realloc
-subtest "id realloc" => sub {
+{
     $c->drop;
 
     my $med_str = "z" x 4014;
     $c->insert({'text' => $med_str, 'id2' => MongoDB::OID->new});
     my $result = $c->find_one;
     is($result->{'text'}, $med_str, 'id realloc');
-};
+}
 
-subtest "types" => sub {
+{
     $c->drop;
 
     my $id = $c->insert({"n" => undef,
@@ -88,31 +87,32 @@ subtest "types" => sub {
     isa_ok($obj->{'_id'}, 'MongoDB::OID');
     is($obj->{'_id'}, $id);
     is($obj->{'string'}, 'string');
-};
+}
 
-subtest "\$MongoDB::BSON::char '='" => sub {
+{
     local $MongoDB::BSON::char = "=";
     $c->drop;
     $c->update({x => 1}, {"=inc" => {x => 1}}, {upsert => true});
 
     my $up = $c->find_one;
     is($up->{x}, 2);
-};
+}
 
-subtest "\$MongoDB::BSON::char ';'" => sub {
+{
     local $MongoDB::BSON::char = ":";
     $c->drop;
     $c->batch_insert([{x => 1}, {x => 2}, {x => 3}, {x => 4}, {x => 5}]);
     my $cursor = $c->query({x => {":gt" => 2, ":lte" => 4}})->sort({x => 1});
+
     my $result = $cursor->next;
     is($result->{x}, 3);
     $result = $cursor->next;
     is($result->{x}, 4);
     ok(!$cursor->has_next);
-};
+}
 
 # utf8
-subtest "UTF-8 strings" => sub {
+{
     $c->drop;
 
     # latin1
@@ -130,7 +130,7 @@ subtest "UTF-8 strings" => sub {
     # make sure it's being returned as a utf8 string
     ok(utf8::is_utf8($x->{char}));
     is(length $x->{char}, 2);
-};
+}
 
 subtest "bad UTF8" => sub {
 
@@ -157,14 +157,16 @@ subtest "bad UTF8" => sub {
 
 };
 
-subtest "undefined" => sub {
+# undefined
+{
     my $err = $testdb->last_error();
     ok(!$err->{err}, "undef");
     $err->{err} = "foo";
     is($err->{err}, "foo", "assign to undef");
-};
+}
 
-subtest "circular references" => sub {
+# circular references
+{
     my $q = {};
     $q->{'q'} = $q;
 
@@ -192,46 +194,48 @@ subtest "circular references" => sub {
     };
 
     ok($@ =~ /circular ref/);
-};
+}
 
-subtest "no . in key names" => sub {
+# no . in key names
+{
     eval {
         $c->insert({"x.y" => "foo"});
     };
-    like($@, qr/documents for storage cannot contain/);
+    ok($@ =~ /inserts cannot contain/);
 
     eval {
         $c->insert({"x.y" => "foo", "bar" => "baz"});
     };
-    like($@, qr/documents for storage cannot contain/);
+    ok($@ =~ /inserts cannot contain/);
 
     eval {
         $c->insert({"bar" => "baz", "x.y" => "foo"});
     };
-    like($@, qr/documents for storage cannot contain/);
+    ok($@ =~ /inserts cannot contain/);
 
     eval {
         $c->insert({"bar" => {"x.y" => "foo"}});
     };
-    like($@, qr/documents for storage cannot contain/);
+    ok($@ =~ /inserts cannot contain/);
 
     eval {
         $c->batch_insert([{"x" => "foo"}, {"x.y" => "foo"}, {"y" => "foo"}]);
     };
-    like($@, qr/documents for storage cannot contain/);
+    ok($@ =~ /inserts cannot contain/);
 
     eval {
         $c->batch_insert([{"x" => "foo"}, {"foo" => ["x", {"x.y" => "foo"}]}, {"y" => "foo"}]);
     };
-    like($@, qr/documents for storage cannot contain/);
-};
+    ok($@ =~ /inserts cannot contain/);
+}
 
-subtest "empty key name" => sub {
+# empty key name
+{
     eval {
         $c->insert({"" => "foo"});
     };
     ok($@ =~ /empty key name/);
-};
+}
 
 
 # moose numbers
@@ -242,32 +246,34 @@ has 'age'  => ( is=>'rw', isa=>'Int' );
 has 'size' => ( is=>'rw', isa=>'Num' );
 
 package main;
-
-subtest "Person object" => sub {
+{
     $c->drop;
 
     my $p = Person->new( name=>'jay', age=>22 );
     $c->save($p);
 
     my $person = $c->find_one;
-    ok(is_float($person->{'age'}));
-};
+    is($person->{'age'}, 22, "roundtrip number");
+}
 
-subtest "warn on floating timezone" => sub {
+# warn on floating timezone
+{
     my $warned = 0;
     local $SIG{__WARN__} = sub { if ($_[0] =~ /floating/) { $warned = 1; } else { warn(@_); } };
     my $date = DateTime->new(year => 2010, time_zone => "floating");
     $c->insert({"date" => $date});
     is($warned, 1, "warn on floating timezone");
-};
+}
 
-subtest "epoch time" => sub {
+# epoch should be legal
+{
     my $date = DateTime->from_epoch( epoch => 0 );
     is( exception { $c->insert( { "date" => $date } ) },
         undef, "inserting DateTime at epoch succeeds" );
-};
+}
 
-subtest "half-conversion to int type" => sub {
+# half-conversion to int type
+{
     $c->drop;
 
     my $var = 'zzz';
@@ -281,9 +287,10 @@ subtest "half-conversion to int type" => sub {
 
     # make sure it was saved as string
     is($v->{'key'}, 'zzz');
-};
+}
 
-subtest "store a scalar with magic that's both a float and int (PVMG w/pIOK set)" => sub {
+# store a scalar with magic that's both a float and int (PVMG w/pIOK set)
+{
     $c->drop;
 
     # PVMG (NV is 11.5)
@@ -299,9 +306,10 @@ subtest "store a scalar with magic that's both a float and int (PVMG w/pIOK set)
 
     # make sure it was saved as float
     is(($v->{'key'}), $size);
-};
+}
 
-subtest "make sure _ids aren't double freed" => sub {
+# make sure _ids aren't double freed
+{
     $c->drop;
 
     my $insert1 = ['_id' => 1];
@@ -312,9 +320,10 @@ subtest "make sure _ids aren't double freed" => sub {
 
     $id = $c->insert($insert2, {safe => 1});
     is($id, 2);
-};
+}
 
-subtest "aggressively convert numbers" => sub {
+# aggressively convert numbers
+{
     $MongoDB::BSON::looks_like_number = 1;
 
     $c->drop;
@@ -332,9 +341,10 @@ subtest "aggressively convert numbers" => sub {
     is($c->count({num => {'$gte' => "4.1"}}), 4);
 
     $MongoDB::BSON::looks_like_number = 0;
-};
+}
 
-subtest "MongoDB::BSON::String type" => sub {
+# MongoDB::BSON::String type
+{
     $MongoDB::BSON::looks_like_number = 1;
 
     $c->drop;
@@ -349,9 +359,10 @@ subtest "MongoDB::BSON::String type" => sub {
     is($c->count({num => 1}), 1);
     is($c->count({num => "001"}), 1);
     is($c->count, 2);
-};
+}
 
-subtest "MongoDB::BSON::Binary type" => sub {
+# MongoDB::BSON::Binary type
+{
     $c->drop;
 
     local $MongoDB::BSON::use_binary = 0;
@@ -391,9 +402,10 @@ subtest "MongoDB::BSON::Binary type" => sub {
         is($arr[$i]->subtype, $bin->{'bindata'}->[$i]->subtype);
         is($arr[$i]->data, $bin->{'bindata'}->[$i]->data);
     }
-};
+}
 
-subtest "Checking hash key unicode support" => sub {
+# Checking hash key unicode support
+{
     use utf8;
     $c->drop;
     
@@ -405,6 +417,6 @@ subtest "Checking hash key unicode support" => sub {
     is ( $@, '' );
     my $obj = $c->find_one( { _id => $oid } );
     is ( $obj->{$testkey}, 1 );
-};
+}
 
 done_testing;

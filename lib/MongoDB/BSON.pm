@@ -20,12 +20,10 @@ package MongoDB::BSON;
 # ABSTRACT: Tools for serializing and deserializing data in BSON form
 
 use version;
-our $VERSION = 'v0.999.998.1'; # TRIAL
-
-use XSLoader;
-XSLoader::load("MongoDB", $VERSION);
+our $VERSION = 'v0.707.1.0';
 
 use Moose;
+use MongoDB;
 use namespace::clean -except => 'meta';
 
 #pod =head1 NAME
@@ -111,34 +109,6 @@ $MongoDB::BSON::use_boolean = 0;
 
 $MongoDB::BSON::use_binary = 0;
 
-sub decode_bson {
-    my ($msg,$client) = @_;
-    my @decode_args;
-    if ( $client ) {
-        @decode_args = map { $client->$_ } qw/dt_type inflate_dbrefs inflate_regexps/;
-        push @decode_args, $client;
-    }
-    else {
-        @decode_args = (undef, 0, 0, undef);
-    }
-    my $struct = eval { MongoDB::BSON::_decode_bson($msg, @decode_args) };
-    Carp::confess($@) if $@;
-    return $struct;
-}
-
-sub encode_bson {
-    my ($struct, $clean_keys, $max_size) = @_;
-    $clean_keys = 0 unless defined $clean_keys;
-    my $bson = eval { MongoDB::BSON::_encode_bson($struct, $clean_keys) };
-    Carp::confess($@) if $@;
-
-    if ( $max_size && length($bson) > $max_size ) {
-        Carp::confess("Document exceeds maximum size $max_size");
-    }
-
-    return $bson;
-}
-
 __PACKAGE__->meta->make_immutable;
 
 1;
@@ -155,7 +125,7 @@ MongoDB::BSON - Tools for serializing and deserializing data in BSON form
 
 =head1 VERSION
 
-version v0.999.998.1
+version v0.707.1.0
 
 =head1 NAME
 
@@ -226,7 +196,7 @@ you would like to have it deserialized as instances of L<MongoDB::BSON::Binary>
 
 =item *
 
-David Golden <david@mongodb.com>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -234,7 +204,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.com>
+Kristina Chodorow <kristina@mongodb.org>
 
 =item *
 

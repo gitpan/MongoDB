@@ -19,10 +19,9 @@ package MongoDB::WriteResult;
 # ABSTRACT: MongoDB write result document
 
 use version;
-our $VERSION = 'v0.999.998.1'; # TRIAL
+our $VERSION = 'v0.707.1.0';
 
 use Moose;
-use MongoDB::Error;
 use MongoDB::_Types;
 use Syntax::Keyword::Junction qw/any/;
 use namespace::clean -except => 'meta';
@@ -93,9 +92,6 @@ sub _parse {
     my ( $op, $op_count, $batch_count, $result ) =
       @{$args}{qw/op op_count batch_count result/};
 
-    $result = $result->result
-      if eval { $result->isa("MongoDB::CommandResult") };
-
     confess "op argument to parse must be one of: @op_map_keys"
       unless $op eq any(@op_map_keys);
     confess "results argument to parse must be a hash reference"
@@ -135,57 +131,6 @@ sub _parse {
       ( $op eq 'update' || $op eq 'upsert' ) ? $result->{nModified} : 0;
 
     return $class->new($attrs);
-}
-
-#pod =method assert
-#pod
-#pod Throws an error if write errors or write concern errors occurred.
-#pod
-#pod =cut
-
-sub assert {
-    my ($self) = @_;
-    $self->assert_no_write_error;
-    $self->assert_no_write_concern_error;
-    return 1;
-}
-
-#pod =method assert_no_write_error
-#pod
-#pod Throws a MongoDB::WriteError if C<count_writeErrors> is non-zero; otherwise
-#pod returns 1.
-#pod
-#pod =cut
-
-sub assert_no_write_error {
-    my ($self) = @_;
-    if ( $self->count_writeErrors ) {
-        MongoDB::WriteError->throw(
-            message => $self->last_errmsg,
-            result  => $self,
-            code => $self->writeErrors->[0]{code} || UNKNOWN_ERROR,
-        );
-    }
-    return 1;
-}
-
-#pod =method assert_no_write_concern_error
-#pod
-#pod Throws a MongoDB::WriteConcernError if C<count_writeConcernErrors> is non-zero; otherwise
-#pod returns 1.
-#pod
-#pod =cut
-
-sub assert_no_write_concern_error {
-    my ($self) = @_;
-    if ( $self->count_writeConcernErrors ) {
-        MongoDB::WriteConcernError->throw(
-            message => $self->last_errmsg,
-            result  => $self,
-            code    => WRITE_CONCERN_ERROR,
-        );
-    }
-    return 1;
 }
 
 #pod =method count_writeErrors
@@ -284,7 +229,7 @@ MongoDB::WriteResult - MongoDB write result document
 
 =head1 VERSION
 
-version v0.999.998.1
+version v0.707.1.0
 
 =head1 SYNOPSIS
 
@@ -399,20 +344,6 @@ C<op_count> if multiple operations were grouped together.
 
 =head1 METHODS
 
-=head2 assert
-
-Throws an error if write errors or write concern errors occurred.
-
-=head2 assert_no_write_error
-
-Throws a MongoDB::WriteError if C<count_writeErrors> is non-zero; otherwise
-returns 1.
-
-=head2 assert_no_write_concern_error
-
-Throws a MongoDB::WriteConcernError if C<count_writeConcernErrors> is non-zero; otherwise
-returns 1.
-
 =head2 count_writeErrors
 
 Returns the number of write errors
@@ -432,7 +363,7 @@ C<writeConcernErrors> or the empty string if there are no errors.
 
 =item *
 
-David Golden <david@mongodb.com>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -440,7 +371,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.com>
+Kristina Chodorow <kristina@mongodb.org>
 
 =item *
 

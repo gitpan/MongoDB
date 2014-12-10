@@ -22,14 +22,14 @@ package MongoDB;
 # ABSTRACT: Official MongoDB Driver for Perl
 
 use version;
-our $VERSION = 'v0.999.998.1'; # TRIAL
+our $VERSION = 'v0.707.1.0';
 
 # regexp_pattern was unavailable before 5.10, had to be exported to load the
 # function implementation on 5.10, and was automatically available in 5.10.1
 use if ($] eq '5.010000'), 're', 'regexp_pattern';
 
-use Carp ();
-use MongoDB::BSON;
+use XSLoader;
+use MongoDB::Connection;
 use MongoDB::MongoClient;
 use MongoDB::Database;
 use MongoDB::Collection;
@@ -39,31 +39,10 @@ use MongoDB::Timestamp;
 use MongoDB::BSON::Binary;
 use MongoDB::BSON::Regexp;
 use MongoDB::BulkWrite;
-use MongoDB::_Link;
-use MongoDB::_Protocol;
+
+XSLoader::load(__PACKAGE__, $MongoDB::VERSION);
 
 *read_documents = \&MongoDB::BSON::decode_bson;
-
-# regexp_pattern was unavailable before 5.10, had to be exported to load the
-# function implementation on 5.10, and was automatically available in 5.10.1
-if ( $] eq '5.010' ) {
-    require re;
-    re->import('regexp_pattern');
-}
-
-sub force_double {
-    if ( ref $_[0] ) {
-        Carp::croak("Can't force a reference into a double");
-    }
-    return $_[0] = unpack("d",pack("d", $_[0]));
-}
-
-sub force_int {
-    if ( ref $_[0] ) {
-        Carp::croak("Can't force a reference into an int");
-    }
-    return $_[0] = int($_[0]);
-}
 
 1;
 
@@ -79,90 +58,7 @@ MongoDB - Official MongoDB Driver for Perl
 
 =head1 VERSION
 
-version v0.999.998.1
-
-This is the Alpha 1 release for v1.0.0.0.
-
-=head1 ALPHA RELEASE NOTICE AND ROADMAP
-
-The v0.999.998.x releases are B<alpha> releases towards v1.0.0.0.  While they
-are believed be as reliable as the stable release series, the implementation
-and API are still subject to change.  While preserving back-compatibility is
-important and will be delivered to a great extent, it will not be guaranteed.
-
-Using the v0.999.998.x series means that you understand that your code may break
-due to changes in the driver between now and the v1.0.0.0 stable release.
-
-This alpha 1 release includes these major changes:
-
-=over
-
-=item *
-
-All networking code is implemented in pure-Perl.  SSL support is provided by
-L<IO::Socket::SSL> (if installed).  Likewise, SASL authentication support is
-provided by L<Authen::SASL> backends (if installed).  This should improve
-portability and ease installation.
-
-=item *
-
-Server monitoring and failover are significantly improved.
-
-=item *
-
-Expanded use of exceptions for error handling.
-
-=back
-
-More details on changes and how to upgrade applications may be found in
-L<MongoDB::Upgrading>.
-
-=head2 Roadmap
-
-Subsequent alphas will be released approximately monthly.  The v1.0.0.0 release
-is expected in the middle of 2015.
-
-Some expected (but not guaranteed) changes in future releases include:
-
-=over
-
-=item *
-
-The driver will become pure-Perl capable, using the Moo framework instead of Moose.
-
-=item *
-
-BSON encoding will be extracted to a separate module, with both pure-Perl and C variants available.
-
-=item *
-
-Transformation of Perl data structures to/from BSON will become more customizable.
-
-=item *
-
-An exception-based error system will be used exclusively throughout the driver.
-
-=item *
-
-Some existing options and methods will be deprecated to improve consistency and clarity of what remains.
-
-=item *
-
-Some configuration options and method return values will be implemented with objects for validation and interface consistency.
-
-=item *
-
-Various internal changes to support new protocol capabilities of MongoDB 2.6 and later.
-
-=item *
-
-The driver will have a smaller total dependency tree.
-
-=item *
-
-Documentation will be significantly revised.
-
-=back
+version v0.707.1.0
 
 =head1 SYNOPSIS
 
@@ -180,12 +76,12 @@ This is the official Perl driver for MongoDB.  MongoDB is an open-source
 document database that provides high performance, high availability, and easy
 scalability.
 
-A MongoDB server (or multi-server deployment) hosts a number of databases. A
-database holds a set of collections. A collection holds a set of documents. A
-document is a set of key-value pairs. Documents have dynamic schema. Dynamic
-schema means that documents in the same collection do not need to have the same
-set of fields or structure, and common fields in a collection's documents may
-hold different types of data.
+A MongoDB server (or cluster) hosts a number of databases. A database holds a
+set of collections. A collection holds a set of documents. A document is a set
+of key-value pairs. Documents have dynamic schema. Dynamic schema means that
+documents in the same collection do not need to have the same set of fields or
+structure, and common fields in a collection's documents may hold different
+types of data.
 
 Here are some resources for learning more about MongoDB:
 
@@ -228,7 +124,7 @@ The MongoDB driver is organized into a set of classes representing different
 levels of abstraction and functionality.
 
 As a user, you first create and configure a L<MongoDB::MongoClient> object to
-connect to a MongoDB deployment.  From that client object, you can get
+connect to a MongoDB server (or cluster).  From that client object, you can get
 a L<MongoDB::Database> object for interacting with a specific database.
 
 From a database object you can get a L<MongoDB::Collection> object for CRUD
@@ -238,6 +134,35 @@ classes may return other objects for specific features or functions.
 
 See the documentation of those classes for more details or the
 L<MongoDB Perl Driver Tutorial|MongoDB::Tutorial> for an example.
+
+=head1 FUNCTIONS (DEPRECATED)
+
+The following low-level functions are deprecated and will be removed in a
+future release.
+
+=over 4
+
+=item *
+
+write_insert
+
+=item *
+
+write_query
+
+=item *
+
+write_update
+
+=item *
+
+write_remove
+
+=item *
+
+read_documents
+
+=back
 
 =head1 SEMANTIC VERSIONING SCHEME
 
@@ -279,28 +204,13 @@ enhancement (v0.705.0.0), or an API change (v1.0.0.0).
 See the Changes file included with development releases for an indication of
 the nature of changes involved.
 
-=for :stopwords cpan testmatrix url annocpan anno bugtracker rt cpants kwalitee diff irc mailto metadata placeholders metacpan
-
-=head1 SUPPORT
-
-=head2 Bugs / Feature Requests
-
-Please report any bugs or feature requests through the issue tracker at L<https://jira.mongodb.org/browse/PERL>.  You will be notified automatically of any progress on your issue.
-
-=head2 Source Code
-
-This is open source software.  The code repository is available for public review and contribution under the terms of the license.
-L<https://github.com/mongodb/mongo-perl-driver>
-
-  git clone https://github.com/mongodb/mongo-perl-driver.git
-
 =head1 AUTHORS
 
 =over 4
 
 =item *
 
-David Golden <david@mongodb.com>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -308,195 +218,11 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.com>
+Kristina Chodorow <kristina@mongodb.org>
 
 =item *
 
 Florian Ragwitz <rafl@debian.org>
-
-=back
-
-=head1 CONTRIBUTORS
-
-=for stopwords Andrew Page Andrey Khozov Ashley Willis Ask Bjørn Hansen Brendan W. McAdams Casey Rojas Christian Sturm Colin Cyr danny David Morrison Nadle Steinbrunner Storch D. Ilmari Mannsåker Eric Daniels Gerard Goossen Graham Barr Jason Carey Toffaletti Johann Rolschewski Joseph Harnish Joshua Juran J. Stewart Kamil Slowikowski Ken Williams mapbuh Matthew Shopsin Michael Langner Rotmanov Mike Dirolf Friedman nightlord nightsailer Nuno Carvalho Orlando Vazquez Othello Maurer Robin Lee Roman Yerin Ronald J Kimball Stephen Oberholtzer Steve Sanbeg Stuart Watt Uwe Voelker Whitney.Jackson
-
-=over 4
-
-=item *
-
-Andrew Page <andrew@infosiftr.com>
-
-=item *
-
-Andrey Khozov <avkhozov@gmail.com>
-
-=item *
-
-Ashley Willis <ashleyw@cpan.org>
-
-=item *
-
-Ask Bjørn Hansen <ask@develooper.com>
-
-=item *
-
-Brendan W. McAdams <brendan@mongodb.com>
-
-=item *
-
-Casey Rojas <casey.j.rojas@gmail.com>
-
-=item *
-
-Christian Sturm <kind@gmx.at>
-
-=item *
-
-Colin Cyr <ccyr@sailingyyc.com>
-
-=item *
-
-danny <danny@paperskymedia.com>
-
-=item *
-
-David Morrison <dmorrison@venda.com>
-
-=item *
-
-David Nadle <david@nadle.com>
-
-=item *
-
-David Steinbrunner <dsteinbrunner@pobox.com>
-
-=item *
-
-David Storch <david.storch@mongodb.com>
-
-=item *
-
-D. Ilmari Mannsåker <ilmari.mannsaker@net-a-porter.com>
-
-=item *
-
-Eric Daniels <eric.daniels@mongodb.com>
-
-=item *
-
-Gerard Goossen <gerard@ggoossen.net>
-
-=item *
-
-Graham Barr <gbarr@pobox.com>
-
-=item *
-
-Jason Carey <jason.carey@mongodb.com>
-
-=item *
-
-Jason Toffaletti <jason@topsy.com>
-
-=item *
-
-Johann Rolschewski <rolschewski@gmail.com>
-
-=item *
-
-Joseph Harnish <bigjoe1008@gmail.com>
-
-=item *
-
-Joshua Juran <jjuran@metamage.com>
-
-=item *
-
-J. Stewart <jstewart@langley.theshire>
-
-=item *
-
-Kamil Slowikowski <kslowikowski@gmail.com>
-
-=item *
-
-Ken Williams <kwilliams@cpan.org>
-
-=item *
-
-mapbuh <n.trupcheff@gmail.com>
-
-=item *
-
-Matthew Shopsin <matt.shopsin@mongodb.com>
-
-=item *
-
-Michael Langner <langner@fch.de>
-
-=item *
-
-Michael Rotmanov <rotmanov@sipgate.de>
-
-=item *
-
-Mike Dirolf <mike@mongodb.com>
-
-=item *
-
-Mike Friedman <mike.friedman@mongodb.com>
-
-=item *
-
-nightlord <zzh_621@yahoo.com>
-
-=item *
-
-nightsailer <nightsailer@gmail.com>
-
-=item *
-
-Nuno Carvalho <mestre.smash@gmail.com>
-
-=item *
-
-Orlando Vazquez <ovazquez@gmail.com>
-
-=item *
-
-Othello Maurer <omaurer@venda.com>
-
-=item *
-
-Robin Lee <cheeselee@fedoraproject.org>
-
-=item *
-
-Roman Yerin <kid@cpan.org>
-
-=item *
-
-Ronald J Kimball <rkimball@pangeamedia.com>
-
-=item *
-
-Stephen Oberholtzer <stevie@qrpff.net>
-
-=item *
-
-Steve Sanbeg <stevesanbeg@buzzfeed.com>
-
-=item *
-
-Stuart Watt <stuart@morungos.com>
-
-=item *
-
-Uwe Voelker <uwe.voelker@xing.com>
-
-=item *
-
-Whitney.Jackson <whjackson@gmail.com>
 
 =back
 

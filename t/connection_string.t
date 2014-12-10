@@ -21,133 +21,115 @@ use Test::More;
 use Test::Fatal;
 use Test::Warn;
 
-use MongoDB::_URI;
+use MongoDB;
 
 subtest "localhost" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://localhost');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://localhost');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "localhost trailing comma" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://localhost,');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://localhost,');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "localhost with username/password" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://fred:foobar@localhost');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://fred:foobar@localhost');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
-    is($uri->username, 'fred');
-    is($uri->password, 'foobar');
-};
-
-subtest "localhost with username only" => sub {
-
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://fred@localhost');
-    my @hostpairs = ('localhost:27017');
-
-    is_deeply($uri->hostpairs, \@hostpairs);
-    is($uri->username, 'fred');
-    is($uri->password, '');
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
+    is($parsed_connection{username}, 'fred');
+    is($parsed_connection{password}, 'foobar');
 };
 
 subtest "localhost with username/password and db" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://fred:foobar@localhost/baz');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://fred:foobar@localhost/baz');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
-    is($uri->username, 'fred');
-    is($uri->password, 'foobar');
-    is($uri->db_name, 'baz');
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
+    is($parsed_connection{username}, 'fred');
+    is($parsed_connection{password}, 'foobar');
+    is($parsed_connection{db_name}, 'baz');
 };
 
 subtest "localhost with username/password and db (trailing comma)" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://fred:foobar@localhost,/baz');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://fred:foobar@localhost,/baz');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
-    is($uri->username, 'fred');
-    is($uri->password, 'foobar');
-    is($uri->db_name, 'baz');
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
+    is($parsed_connection{username}, 'fred');
+    is($parsed_connection{password}, 'foobar');
+    is($parsed_connection{db_name}, 'baz');
 };
 
 subtest "localhost with username/password and db (trailing question)" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://fred:foobar@localhost/baz?');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://fred:foobar@localhost/baz?');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
-    is($uri->username, 'fred');
-    is($uri->password, 'foobar');
-    is($uri->db_name, 'baz');
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
+    is($parsed_connection{username}, 'fred');
+    is($parsed_connection{password}, 'foobar');
+    is($parsed_connection{db_name}, 'baz');
 };
 
 subtest "localhost with empty extras" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://:@localhost/?');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://:@localhost/?');
     my @hostpairs = ('localhost:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "multiple hostnames" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://example1.com:27017,example2.com:27017');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://example1.com:27017,example2.com:27017');
     my @hostpairs = ('example1.com:27017', 'example2.com:27017');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "multiple hostnames at localhost" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://localhost,localhost:27018,localhost:27019');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://localhost,localhost:27018,localhost:27019');
     my @hostpairs = ('localhost:27017', 'localhost:27018', 'localhost:27019');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "multiple hostnames (localhost/domain)" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://localhost,example1.com:27018,localhost:27019');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://localhost,example1.com:27018,localhost:27019');
     my @hostpairs = ('localhost:27017', 'example1.com:27018', 'localhost:27019');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "multiple hostnames (localhost/domain)" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://localhost,example1.com:27018,localhost:27019');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://localhost,example1.com:27018,localhost:27019');
     my @hostpairs = ('localhost:27017', 'example1.com:27018', 'localhost:27019');
 
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 subtest "percent encoded username and password" => sub {
 
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://dog%3Adogston:p%40ssword@localhost');
+    my %parsed_connection = MongoDB::MongoClient::_parse_connection_string('mongodb://dog%3Adogston:p%40ssword@localhost');
     my @hostpairs = ('localhost:27017');
 
-    is($uri->username, 'dog:dogston');
-    is($uri->password, 'p@ssword');
-    is_deeply($uri->hostpairs, \@hostpairs);
-};
-
-subtest "case normalization" => sub {
-
-    my $uri = MongoDB::_URI->new( uri => 'mongodb://eXaMpLe1.cOm:27017,eXAMPLe2.com:27017');
-    my @hostpairs = ('example1.com:27017', 'example2.com:27017');
-
-    is_deeply($uri->hostpairs, \@hostpairs);
+    is($parsed_connection{username}, 'dog:dogston');
+    is($parsed_connection{password}, 'p@ssword');
+    is_deeply($parsed_connection{hostpairs}, \@hostpairs);
 };
 
 done_testing;

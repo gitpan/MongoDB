@@ -68,11 +68,9 @@ my $server_version = server_version($conn);
 
 # non-existent command
 {
-    like (
-        exception { $testdb->run_command({ foo => 'bar' }) },
-        qr/no such cmd|unrecognized command/,
-        "error from non-existent command"
-    );
+    my $result = $testdb->run_command({ foo => 'bar' });
+    # server keeps changing what it sends
+    like ($result, qr/no such command|no such cmd|unrecognized command/, "error from non-existent command");
 }
 
 # getlasterror
@@ -90,7 +88,7 @@ subtest 'getlasterror' => sub {
     is($result->{err}, undef, 'last_error: err');
 
     # mongos never returns 'n'
-    is($result->{n}, $conn->topology_type eq 'Sharded' ? undef : 0, 'last_error: n');
+    is($result->{n}, $conn->_is_mongos ? undef : 0, 'last_error: n');
 };
 
 # reseterror 
@@ -101,7 +99,7 @@ subtest 'getlasterror' => sub {
 
 # forceerror
 {
-    exception{ $testdb->run_command({forceerror => 1}) };
+    $testdb->run_command({forceerror => 1});
 
     my $result = $testdb->last_error;
     is($result->{ok}, 1, 'last_error1');
@@ -116,11 +114,8 @@ subtest "eval" => sub {
     my $hello = $testdb->eval('function(x) { return "hello, "+x; }', ["world"]);
     is('hello, world', $hello, 'db eval');
 
-    like(
-        exception { $testdb->eval('function(x) { xreturn "hello, "+x; }', ["world"]) },
-        qr/SyntaxError/,
-        'js err'
-    );
+    my $err = $testdb->eval('function(x) { xreturn "hello, "+x; }', ["world"]);
+    like( $err, qr/SyntaxError/, 'js err');
 };
 
 # tie

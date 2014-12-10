@@ -19,7 +19,7 @@ package MongoDB::Role::_Updater;
 # Role for update and replace operations
 
 use version;
-our $VERSION = 'v0.999.998.1'; # TRIAL
+our $VERSION = 'v0.707.1.0';
 
 use boolean;
 use Syntax::Keyword::Junction qw/any/;

@@ -8,29 +8,7 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
-9d45bf8 PERL-429 fix tag_sets logic
-6a11744 PERL-454 don't warn creating BSON datetime at epoch
-7f49bfb PERL-409 add missing declarations for MinGW on Windows
-41546e9 PERL-434 use listIndexes command
-5dd5056 add devel test for PERL-433
-0328fc4 PERL-433 use listCollections command for collection_names
-3095287 PERL-436 bump maxWireProtocolVersion
-6ff1996 PERL-408 Implement SCRAM-SHA-1 and revise handshake
-0f79bd8 PERL-435 switch to http-style certificate name validation
-9a63eb5 PERL-422 add read prefs support for the connection string
-be44ab1 PERL-233 Implement SSL certificate support via IO::Socket::SSL options
-2b04672 PERL-425 deprecate drop_dups
-688b26d PERL-133 test that client can connect to RS without primary
-e69b8d5 PERL-146 normalize server addresses to lower case
-5665433 PERL-146 normalize URI addresses to lower case
-8e86e9d PERL-379 Implement server-selection and new read preferences
-77f732a note PERL-406 in Changes
-0fd6a62 PERL-131 support connect option in URI
-daccd3b PERL-406 Allow count methods to work with query hints
-652fdf0 PERL-378 implement cluster and server model
-baa0fb4 PERL-375 Support adding cursor options to find_one
-4a66960 PERL-410 die on BSON encoding/decoding if invalid UTF-8 is detected
-024de23 PERL-330 implement pure-Perl networking
+8dc43cd PERL-465 added support for arbitrary options on index creation
 
 EOC
 
@@ -46,7 +24,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.999.998.1(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.707.1.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;

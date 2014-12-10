@@ -17,27 +17,18 @@
 package MongoDB::Cursor;
 
 
-# ABSTRACT: A lazy cursor for Mongo query results
+# ABSTRACT: A cursor/iterator for Mongo query results
 
 use version;
-our $VERSION = 'v0.999.998.1'; # TRIAL
+our $VERSION = 'v0.707.1.0';
 
 use Moose;
 use MongoDB;
-use MongoDB::BSON;
 use MongoDB::Error;
-use MongoDB::QueryResult;
-use MongoDB::_Protocol;
-use MongoDB::_Types;
 use boolean;
 use Tie::IxHash;
 use Try::Tiny;
 use namespace::clean -except => 'meta';
-
-use constant {
-    CURSOR_ZERO => "\0" x 8,
-    FLAG_ZERO => "\0" x 4,
-};
 
 #pod =head1 NAME
 #pod
@@ -79,13 +70,13 @@ $MongoDB::Cursor::slave_okay = 0;
 
 #pod =head2 timeout
 #pod
-#pod B<Deprecated, use MongoDB::MongoClient::query_timeout instead.>
+#pod B<Deprecated, use MongoDB::Connection::query_timeout instead.>
 #pod
 #pod How many milliseconds to wait for a response from the server.  Set to 30000
 #pod (30 seconds) by default.  -1 waits forever (or until TCP times out, which is
 #pod usually a long time).
 #pod
-#pod This value is overridden by C<MongoDB::MongoClient::query_timeout> and never
+#pod This value is overridden by C<MongoDB::Connection::query_timeout> and never
 #pod used.
 #pod
 #pod =cut
@@ -102,9 +93,18 @@ $MongoDB::Cursor::timeout = 30000;
 #pod
 #pod =cut
 
-with 'MongoDB::Role::_Cursor';
+has started_iterating => (
+    is => 'rw',
+    isa => 'Bool',
+    required => 1,
+    default => 0,
+);
 
-# general attributes
+has _master => (
+    is => 'ro',
+    isa => 'MongoDB::MongoClient',
+    required => 1,
+);
 
 has _client => (
     is => 'rw',
@@ -118,14 +118,10 @@ has _ns => (
     required => 1,
 );
 
-# attributes for sending a query
-
 has _query => (
     is => 'rw',
-    isa => 'MongoDBQuery',
+    isa => 'Tie::IxHash',
     required => 1,
-    coerce => 1,
-    writer => '_set_query',
 );
 
 has _fields => (
@@ -140,6 +136,8 @@ has _limit => (
     default => 0,
 );
 
+# XXX this is here for testing; we can rationalize this later
+# with _aggregate_batch_size when we convert to pure Perl
 has _batch_size => (
     is => 'rw',
     isa => 'Int',
@@ -154,59 +152,15 @@ has _skip => (
     default => 0,
 );
 
-has _query_options => (
-    is => 'ro',
-    isa => 'HashRef',
-    default => sub { { slave_ok => !! $MongoDB::Cursor::slave_okay } },
+has _tailable => (
+    is => 'rw',
+    isa => 'Bool',
+    required => 0,
+    default => 0,
 );
 
-has _read_preference => (
-    is      => 'ro',
-    isa     => 'ReadPreference',
-    lazy    => 1,
-    builder => '_build__read_preference',
-    writer  => '_set_read_preference',
-);
 
-sub _build__read_preference {
-    my ($self) = @_;
-    return $self->_client->read_preference;
-}
 
-# lazy result attribute
-has result => (
-    is        => 'ro',
-    isa       => 'MongoDB::QueryResult',
-    lazy      => 1,
-    builder   => '_build_result',
-    predicate => 'started_iterating',
-    clearer   => '_clear_result',
-);
-
-# this does the query if it hasn't been done yet
-sub _build_result {
-    my ($self) = @_;
-    return $self->_client->send_query(
-        $self->_ns,
-        $self->_query,
-        $self->_fields,
-        $self->_skip,
-        $self->_limit,
-        $self->_batch_size,
-        $self->_query_options,
-        $self->_read_preference,
-    );
-}
-
-#--------------------------------------------------------------------------#
-# methods that modify the query
-#--------------------------------------------------------------------------#
-
-#pod =head1 QUERY MODIFIERS
-#pod
-#pod These methods modify the query to be run.  An exception will be thrown if
-#pod they are called after results are iterated.
-#pod
 #pod =head2 immortal
 #pod
 #pod     $cursor->immortal(1);
@@ -225,17 +179,141 @@ sub _build_result {
 #pod     # wait forever for a query to return results
 #pod     $connection->query_timeout(-1);
 #pod
-#pod See L<MongoDB::MongoClient/query_timeout>.
+#pod See L<MongoDB::Connection/query_timeout>.
 #pod
 #pod =cut
 
-sub immortal {
-    my ( $self, $bool ) = @_;
-    confess "cannot set immortal after querying"
-        if $self->started_iterating;
 
-    $self->_query_options->{immortal} = !!$bool;
-    return $self;
+
+has immortal => (
+    is => 'rw',
+    isa => 'Bool',
+    required => 0,
+    default => 0,
+);
+
+
+
+#pod =head2 partial
+#pod
+#pod If a shard is down, mongos will return an error when it tries to query that
+#pod shard.  If this is set, mongos will just skip that shard, instead.
+#pod
+#pod Boolean value, defaults to 0.
+#pod
+#pod =cut
+
+
+has partial => (
+    is => 'rw',
+    isa => 'Bool',
+    required => 0,
+    default => 0,
+);
+
+#pod =head2 slave_okay
+#pod
+#pod     $cursor->slave_okay(1);
+#pod
+#pod If a query can be done on a slave database server.
+#pod
+#pod Boolean value, defaults to 0.
+#pod
+#pod =cut
+
+has slave_okay => (
+    is => 'rw',
+    isa => 'Bool',
+    required => 0,
+    default => 0,
+);
+
+has _request_id => (
+    is      => 'rw',
+    isa     => 'Int',
+    default => 0,
+);
+
+
+# special attributes for aggregation cursors
+has _agg_first_batch => (
+    is      => 'ro',
+    isa     => 'Maybe[ArrayRef]',
+);
+
+has _agg_batch_size => ( 
+    is      => 'rw',
+    isa     => 'Int',
+    default => 0,
+);
+
+# special flag for parallel scan cursors, since they
+# start out empty
+
+has _is_parallel => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 0,
+);
+
+#pod =head1 METHODS
+#pod
+#pod =cut
+
+
+sub _ensure_nested {
+    my ($self) = @_;
+    if ( ! $self->_query->EXISTS('$query') ) {
+        $self->_query( Tie::IxHash->new('$query' => $self->_query) );
+    }
+    return;
+}
+
+# this does the query if it hasn't been done yet
+sub _do_query {
+    my ($self) = @_;
+
+    $self->_master->rs_refresh();
+
+    # in case the refresh caused a repin
+    $self->_client(MongoDB::Collection::_select_cursor_client($self->_master, $self->_ns, $self->_query));
+
+    if ($self->started_iterating) {
+        return;
+    }
+
+    my $opts = ($self->_tailable() << 1) |
+        (($MongoDB::Cursor::slave_okay | $self->slave_okay) << 2) |
+        ($self->immortal << 4) |
+        ($self->partial << 7);
+
+    my ($query, $info) = MongoDB::write_query($self->_ns, $opts, $self->_skip, $self->_limit || $self->_batch_size, $self->_query, $self->_fields);
+    $self->_request_id($info->{'request_id'});
+
+    if ( length($query) > $self->_client->_max_bson_wire_size ) {
+        MongoDB::_CommandSizeError->throw(
+            message => "database command too large",
+            size => length $query,
+        );
+    }
+
+    eval {
+        $self->_client->send($query);
+        $self->_client->recv($self); 
+    };
+    if ($@ && $self->_master->_readpref_pinned) {
+        $self->_master->repin();
+        $self->_client($self->_master->_readpref_pinned);
+        $self->_client->send($query); 
+        $self->_client->recv($self); 
+    }
+    elsif ($@) {
+        # rethrow the exception if read preference
+        # has not been set
+        die $@;
+    }
+
+    $self->started_iterating(1);
 }
 
 #pod =head2 fields (\%f)
@@ -281,7 +359,8 @@ sub sort {
     confess 'not a hash reference'
 	    unless ref $order eq 'HASH' || ref $order eq 'Tie::IxHash';
 
-    $self->_query->set_modifier('$orderby', $order);
+    $self->_ensure_nested;
+    $self->_query->STORE('orderby', $order);
     return $self;
 }
 
@@ -300,6 +379,7 @@ sub limit {
     my ($self, $num) = @_;
     confess "cannot set limit after querying"
 	if $self->started_iterating;
+
     $self->_limit($num);
     return $self;
 }
@@ -322,7 +402,8 @@ sub max_time_ms {
     confess "can not set max_time_ms after querying"
       if $self->started_iterating;
 
-    $self->_query->set_modifier( '$maxTimeMS', $num );
+    $self->_ensure_nested;
+    $self->_query->STORE( '$maxTimeMS', $num );
     return $self;
 
 }
@@ -344,12 +425,12 @@ sub max_time_ms {
 #pod =cut
 
 sub tailable {
-    my ( $self, $bool ) = @_;
-    confess "cannot set tailable after querying"
-        if $self->started_iterating;
-
-    $self->_query_options->{tailable} = !!$bool;
-    return $self;
+	my($self, $bool) = @_;
+	confess "cannot set tailable after querying"
+	if $self->started_iterating;
+	
+	$self->_tailable($bool);
+	return $self;
 }
 
 
@@ -395,7 +476,8 @@ sub snapshot {
     confess "cannot set snapshot after querying"
 	if $self->started_iterating;
 
-    $self->_query->set_modifier('$snapshot', 1);
+    $self->_ensure_nested;
+    $self->_query->STORE('$snapshot', 1);
     return $self;
 }
 
@@ -424,91 +506,11 @@ sub hint {
         confess 'not a hash reference';
     }
 
-    $self->_query->set_modifier('$hint', $index);
+    $self->_ensure_nested;
+    $self->_query->STORE('$hint', $index);
     return $self;
 }
 
-#pod =head2 partial
-#pod
-#pod     $cursor->partial(1);
-#pod
-#pod If a shard is down, mongos will return an error when it tries to query that
-#pod shard.  If this is set, mongos will just skip that shard, instead.
-#pod
-#pod Boolean value, defaults to 0.
-#pod
-#pod =cut
-
-sub partial {
-    my ($self, $value) = @_;
-    $self->_query_options->{partial} = !! $value;
-
-    # XXX returning self is an API change but more consistent with other cursor methods
-    return $self;
-}
-
-#pod =head2 read_preference
-#pod
-#pod     my $cursor = $coll->find()->read_preference($read_preference_object);
-#pod     my $cursor = $coll->find()->read_preference('secondary', [{foo => 'bar'}]);
-#pod
-#pod Sets read preference for the cursor's connection.
-#pod
-#pod If given a single argument that is a L<MongoDB::ReadPreference> object, the
-#pod read preference is set to that object.  Otherwise, it takes positional
-#pod arguments: the read preference mode and a tag set list, which must be a valid
-#pod mode and tag set list as described in the L<MongoDB::ReadPreference>
-#pod documentation.
-#pod
-#pod Returns $self so that this method can be chained.
-#pod
-#pod =cut
-
-sub read_preference {
-    my $self = shift;
-
-    my $type = ref $_[0];
-    if ( $type eq 'MongoDB::ReadPreference' ) {
-        $self->_set_read_preference( $_[0] );
-    }
-    else {
-        my $mode     = shift || 'primary';
-        my $tag_sets = shift;
-        my $rp       = MongoDB::ReadPreference->new(
-            mode => $mode,
-            ( $tag_sets ? ( tag_sets => $tag_sets ) : () )
-        );
-        $self->_set_read_preference($rp);
-    }
-
-    return $self;
-}
-
-#pod =head2 slave_okay
-#pod
-#pod     $cursor->slave_okay(1);
-#pod
-#pod If a query can be done on a slave database server.
-#pod
-#pod Boolean value, defaults to 0.
-#pod
-#pod Returns the cursor object
-#pod
-#pod =cut
-
-sub slave_okay {
-    my ($self, $value) = @_;
-    $self->_query_options->{slave_ok} = !! $value;
-
-    # XXX returning self is an API change but more consistent with other cursor methods
-    return $self;
-}
-
-#pod =head1 QUERY INTROSPECTION AND RESET
-#pod
-#pod These methods run introspection methods on the query conditions and modifiers
-#pod stored within the cursor object.
-#pod
 #pod =head2 explain
 #pod
 #pod     my $explanation = $cursor->explain;
@@ -527,21 +529,20 @@ sub slave_okay {
 
 sub explain {
     my ($self) = @_;
+    confess "cannot explain a parallel scan"
+        if $self->_is_parallel;
     my $temp = $self->_limit;
     if ($self->_limit > 0) {
         $self->_limit($self->_limit * -1);
     }
 
-    my $old_query = $self->_query;
-    my $new_query = $old_query->clone;
-    $new_query->set_modifier('$explain', boolean::true);
-
-    $self->_set_query( $new_query  );
+    $self->_ensure_nested;
+    $self->_query->STORE('$explain', boolean::true);
 
     my $retval = $self->reset->next;
-
-    $self->_set_query( $old_query );
     $self->reset->limit($temp);
+
+    $self->_query->DELETE('$explain');
 
     return $retval;
 }
@@ -559,26 +560,36 @@ sub explain {
 
 sub count {
     my ($self, $all) = @_;
-    # XXX deprecate this unintuitive API?
+
+    confess "cannot count a parallel scan"
+        if $self->_is_parallel;
 
     my ($db, $coll) = $self->_ns =~ m/^([^\.]+)\.(.*)/;
     my $cmd = new Tie::IxHash(count => $coll);
 
-    $cmd->Push(query => $self->_query->query_doc);
+    if ($self->_query->EXISTS('$query')) {
+        $cmd->Push(query => $self->_query->FETCH('$query'));
+    }
+    else {
+        $cmd->Push(query => $self->_query);
+    }
 
     if ($all) {
         $cmd->Push(limit => $self->_limit) if $self->_limit;
         $cmd->Push(skip => $self->_skip) if $self->_skip;
     }
 
-    if (my $hint = $self->_query->get_modifier('$hint')) {
-        $cmd->Push(hint => $hint);
+    if ($self->_query->EXISTS('$hint')) {
+        $cmd->Push(hint => $self->_query->FETCH('$hint'));
     }
 
-    my $result = try {
-        $self->_client->get_database($db)->_try_run_command($cmd);
+    my $result;
+
+    try {
+        $result = $self->_client->get_database($db)->_try_run_command($cmd);
     }
     catch {
+
         # if there was an error, check if it was the "ns missing" one that means the
         # collection hasn't been created or a real error.
         die $_ unless /^ns missing/;
@@ -588,62 +599,29 @@ sub count {
 }
 
 
-#pod =head1 QUERY ITERATION
-#pod
-#pod These methods allow you to iterate over results.
-#pod
-#pod =head2 result
-#pod
-#pod     my $result = $cursor->result;
-#pod
-#pod This method will return a L<MongoDB::QueryResult> object with the result of the
-#pod query.  The query will be executed on demand.
-#pod
-#pod Iterating with a MongoDB::QueryResult object directly instead of a
-#pod MongoDB::Cursor will be slightly faster, since the MongoDB::Cursor methods
-#pod below just internally call the corresponding method on the result object.
-#pod
-#pod =cut
+sub _add_readpref {
+    my ($self, $prefdoc) = @_;
+    $self->_ensure_nested;
+    $self->_query->STORE('$readPreference', $prefdoc);
+}
 
-#--------------------------------------------------------------------------#
-# methods delgated to result object
-#--------------------------------------------------------------------------#
 
-#pod =head2 has_next
-#pod
-#pod     while ($cursor->has_next) {
-#pod         ...
-#pod     }
-#pod
-#pod Checks if there is another result to fetch.  Will automatically fetch more
-#pod data from the server if necessary.
-#pod
-#pod =cut
+# shortcut to make some XS code saner
+sub _dt_type { 
+    my $self = shift;
+    return $self->_client->dt_type;
+}
 
-sub has_next { $_[0]->result->has_next }
+sub _inflate_dbrefs {
+    my $self = shift;
+    return $self->_client->inflate_dbrefs;
+}
 
-#pod =head2 next
-#pod
-#pod     while (my $object = $cursor->next) {
-#pod         ...
-#pod     }
-#pod
-#pod Returns the next object in the cursor. Will automatically fetch more data from
-#pod the server if necessary. Returns undef if no more data is available.
-#pod
-#pod =cut
+sub _inflate_regexps { 
+    my $self = shift;
+    return $self->_client->inflate_regexps;
+}
 
-sub next { $_[0]->result->next }
-
-#pod =head2 all
-#pod
-#pod     my @objects = $cursor->all;
-#pod
-#pod Returns a list of all objects in the result.
-#pod
-#pod =cut
-
-sub all { $_[0]->result->all }
 
 #pod =head2 reset
 #pod
@@ -655,43 +633,108 @@ sub all { $_[0]->result->all }
 
 sub reset {
     my ($self) = @_;
-    $self->_clear_result;
-    return $self;
+    confess "cannot reset a parallel scan"
+        if $self->_is_parallel;
+    return $self->_reset;
 }
 
+#pod =head2 has_next
+#pod
+#pod     while ($cursor->has_next) {
+#pod         ...
+#pod     }
+#pod
+#pod Checks if there is another result to fetch.
+#pod
+#pod
+#pod =head2 next
+#pod
+#pod     while (my $object = $cursor->next) {
+#pod         ...
+#pod     }
+#pod
+#pod Returns the next object in the cursor. Will automatically fetch more data from
+#pod the server if necessary. Returns undef if no more data is available.
+#pod
 #pod =head2 info
 #pod
-#pod Returns a hash of information about this cursor.  This is intended for
-#pod debugging purposes and users should not rely on the contents of this method for
-#pod production use.  Currently the fields are:
+#pod Returns a hash of information about this cursor.  Currently the fields are:
 #pod
-#pod =for :list
-#pod * C<cursor_id>  -- the server-side id for this cursor as.  This is an opaque string.
-#pod   A C<cursor_id> of "\0\0\0\0\0\0\0\0" means there are no more results on the server.
-#pod * C<num> -- the number of results received from the server so far
-#pod * C<at> -- the (zero-based) index of the document that will be returned next from L</next>
-#pod * C<flag> -- if the database could not find the cursor or another error occurred, C<flag> may
-#pod   contain a hash reference of flags set in the response (depending on the error).  See
-#pod   L<http://www.mongodb.org/display/DOCS/Mongo+Wire+Protocol#MongoWireProtocol-OPREPLY>
-#pod   for a full list of flag values.
-#pod * C<start> -- the index of the result that the current batch of results starts at.
+#pod =over 4
 #pod
-#pod If the cursor has not yet executed, only the C<num> field will be returned with
-#pod a value of 0.
+#pod =item C<cursor_id>
+#pod
+#pod The server-side id for this cursor.  A C<cursor_id> of 0 means that there are no
+#pod more batches to be fetched.
+#pod
+#pod =item C<num>
+#pod
+#pod The number of results returned so far.
+#pod
+#pod =item C<at>
+#pod
+#pod The index of the result the cursor is currently at.
+#pod
+#pod =item C<flag>
+#pod
+#pod If the database could not find the cursor or another error occurred, C<flag> may
+#pod be set (depending on the error).
+#pod See L<http://www.mongodb.org/display/DOCS/Mongo+Wire+Protocol#MongoWireProtocol-OPREPLY>
+#pod for a full list of flag values.
+#pod
+#pod =item C<start>
+#pod
+#pod The index of the result that the current batch of results starts at.
+#pod
+#pod =back
+#pod
+#pod =head2 all
+#pod
+#pod     my @objects = $cursor->all;
+#pod
+#pod Returns a list of all objects in the result.
 #pod
 #pod =cut
 
-sub info {
-    my $self = shift;
-    if ( $self->started_iterating ) {
-        return $self->result->info;
+sub all {
+    my ($self) = @_;
+    my @ret;
+
+    while (my $entry = $self->next) {
+        push @ret, $entry;
     }
-    else {
-        return { num => 0 };
-    }
+
+    return @ret;
 }
 
-__PACKAGE__->meta->make_immutable;
+#pod =head2 read_preference ($mode, $tagsets)
+#pod
+#pod     my $cursor = $coll->find()->read_preference(MongoDB::MongoClient->PRIMARY_PREFERRED, [{foo => 'bar'}]);
+#pod
+#pod Sets read preference for the cursor's connection. The $mode argument
+#pod should be a constant in MongoClient (PRIMARY, PRIMARY_PREFERRED, SECONDARY,
+#pod SECONDARY_PREFERRED). The $tagsets specify selection criteria for secondaries
+#pod in a replica set and should be an ArrayRef whose array elements are HashRefs.
+#pod This is a convenience method which is identical in function to
+#pod L<MongoDB::MongoClient/read_preference>.
+#pod In order to use read preference, L<MongoDB::MongoClient/find_master> must be set.
+#pod For core documentation on read preference see L<http://docs.mongodb.org/manual/core/read-preference/>.
+#pod
+#pod Returns $self so that this method can be chained.
+#pod
+#pod =cut
+
+sub read_preference {
+    my ($self, $mode, $tagsets) = @_;
+
+    $self->_master->read_preference($mode, $tagsets);
+
+    $self->_client($self->_master->_readpref_pinned);
+    return $self;
+}
+
+
+__PACKAGE__->meta->make_immutable (inline_destructor => 0);
 
 1;
 
@@ -703,11 +746,11 @@ __END__
 
 =head1 NAME
 
-MongoDB::Cursor - A lazy cursor for Mongo query results
+MongoDB::Cursor - A cursor/iterator for Mongo query results
 
 =head1 VERSION
 
-version v0.999.998.1
+version v0.707.1.0
 
 =head1 SYNOPSIS
 
@@ -741,13 +784,13 @@ Whether it is okay to run queries on the slave.  Defaults to 0.
 
 =head2 timeout
 
-B<Deprecated, use MongoDB::MongoClient::query_timeout instead.>
+B<Deprecated, use MongoDB::Connection::query_timeout instead.>
 
 How many milliseconds to wait for a response from the server.  Set to 30000
 (30 seconds) by default.  -1 waits forever (or until TCP times out, which is
 usually a long time).
 
-This value is overridden by C<MongoDB::MongoClient::query_timeout> and never
+This value is overridden by C<MongoDB::Connection::query_timeout> and never
 used.
 
 =head1 ATTRIBUTES
@@ -757,11 +800,6 @@ used.
 If this cursor has queried the database yet. Methods
 modifying the query will complain if they are called
 after the database is queried.
-
-=head1 QUERY MODIFIERS
-
-These methods modify the query to be run.  An exception will be thrown if
-they are called after results are iterated.
 
 =head2 immortal
 
@@ -781,7 +819,24 @@ your connection.
     # wait forever for a query to return results
     $connection->query_timeout(-1);
 
-See L<MongoDB::MongoClient/query_timeout>.
+See L<MongoDB::Connection/query_timeout>.
+
+=head2 partial
+
+If a shard is down, mongos will return an error when it tries to query that
+shard.  If this is set, mongos will just skip that shard, instead.
+
+Boolean value, defaults to 0.
+
+=head2 slave_okay
+
+    $cursor->slave_okay(1);
+
+If a query can be done on a slave database server.
+
+Boolean value, defaults to 0.
+
+=head1 METHODS
 
 =head2 fields (\%f)
 
@@ -864,45 +919,6 @@ sorting or explicit hints.
 
 Force Mongo to use a specific index for a query.
 
-=head2 partial
-
-    $cursor->partial(1);
-
-If a shard is down, mongos will return an error when it tries to query that
-shard.  If this is set, mongos will just skip that shard, instead.
-
-Boolean value, defaults to 0.
-
-=head2 read_preference
-
-    my $cursor = $coll->find()->read_preference($read_preference_object);
-    my $cursor = $coll->find()->read_preference('secondary', [{foo => 'bar'}]);
-
-Sets read preference for the cursor's connection.
-
-If given a single argument that is a L<MongoDB::ReadPreference> object, the
-read preference is set to that object.  Otherwise, it takes positional
-arguments: the read preference mode and a tag set list, which must be a valid
-mode and tag set list as described in the L<MongoDB::ReadPreference>
-documentation.
-
-Returns $self so that this method can be chained.
-
-=head2 slave_okay
-
-    $cursor->slave_okay(1);
-
-If a query can be done on a slave database server.
-
-Boolean value, defaults to 0.
-
-Returns the cursor object
-
-=head1 QUERY INTROSPECTION AND RESET
-
-These methods run introspection methods on the query conditions and modifiers
-stored within the cursor object.
-
 =head2 explain
 
     my $explanation = $cursor->explain;
@@ -926,20 +942,11 @@ Returns the number of document this query will return.  Optionally takes a
 boolean parameter, indicating that the cursor's limit and skip fields should be
 used in calculating the count.
 
-=head1 QUERY ITERATION
+=head2 reset
 
-These methods allow you to iterate over results.
-
-=head2 result
-
-    my $result = $cursor->result;
-
-This method will return a L<MongoDB::QueryResult> object with the result of the
-query.  The query will be executed on demand.
-
-Iterating with a MongoDB::QueryResult object directly instead of a
-MongoDB::Cursor will be slightly faster, since the MongoDB::Cursor methods
-below just internally call the corresponding method on the result object.
+Resets the cursor.  After being reset, pre-query methods can be
+called on the cursor (sort, limit, etc.) and subsequent calls to
+next, has_next, or all will re-query the database.
 
 =head2 has_next
 
@@ -947,8 +954,7 @@ below just internally call the corresponding method on the result object.
         ...
     }
 
-Checks if there is another result to fetch.  Will automatically fetch more
-data from the server if necessary.
+Checks if there is another result to fetch.
 
 =head2 next
 
@@ -959,50 +965,62 @@ data from the server if necessary.
 Returns the next object in the cursor. Will automatically fetch more data from
 the server if necessary. Returns undef if no more data is available.
 
+=head2 info
+
+Returns a hash of information about this cursor.  Currently the fields are:
+
+=over 4
+
+=item C<cursor_id>
+
+The server-side id for this cursor.  A C<cursor_id> of 0 means that there are no
+more batches to be fetched.
+
+=item C<num>
+
+The number of results returned so far.
+
+=item C<at>
+
+The index of the result the cursor is currently at.
+
+=item C<flag>
+
+If the database could not find the cursor or another error occurred, C<flag> may
+be set (depending on the error).
+See L<http://www.mongodb.org/display/DOCS/Mongo+Wire+Protocol#MongoWireProtocol-OPREPLY>
+for a full list of flag values.
+
+=item C<start>
+
+The index of the result that the current batch of results starts at.
+
+=back
+
 =head2 all
 
     my @objects = $cursor->all;
 
 Returns a list of all objects in the result.
 
-=head2 reset
+=head2 read_preference ($mode, $tagsets)
 
-Resets the cursor.  After being reset, pre-query methods can be
-called on the cursor (sort, limit, etc.) and subsequent calls to
-next, has_next, or all will re-query the database.
+    my $cursor = $coll->find()->read_preference(MongoDB::MongoClient->PRIMARY_PREFERRED, [{foo => 'bar'}]);
 
-=head2 info
+Sets read preference for the cursor's connection. The $mode argument
+should be a constant in MongoClient (PRIMARY, PRIMARY_PREFERRED, SECONDARY,
+SECONDARY_PREFERRED). The $tagsets specify selection criteria for secondaries
+in a replica set and should be an ArrayRef whose array elements are HashRefs.
+This is a convenience method which is identical in function to
+L<MongoDB::MongoClient/read_preference>.
+In order to use read preference, L<MongoDB::MongoClient/find_master> must be set.
+For core documentation on read preference see L<http://docs.mongodb.org/manual/core/read-preference/>.
 
-Returns a hash of information about this cursor.  This is intended for
-debugging purposes and users should not rely on the contents of this method for
-production use.  Currently the fields are:
+Returns $self so that this method can be chained.
 
-=over 4
+=head1 AUTHOR
 
-=item *
-
-C<cursor_id>  -- the server-side id for this cursor as.  This is an opaque string. A C<cursor_id> of "\0\0\0\0\0\0\0\0" means there are no more results on the server.
-
-=item *
-
-C<num> -- the number of results received from the server so far
-
-=item *
-
-C<at> -- the (zero-based) index of the document that will be returned next from L</next>
-
-=item *
-
-C<flag> -- if the database could not find the cursor or another error occurred, C<flag> may contain a hash reference of flags set in the response (depending on the error).  See L<http://www.mongodb.org/display/DOCS/Mongo+Wire+Protocol#MongoWireProtocol-OPREPLY> for a full list of flag values.
-
-=item *
-
-C<start> -- the index of the result that the current batch of results starts at.
-
-=back
-
-If the cursor has not yet executed, only the C<num> field will be returned with
-a value of 0.
+  Kristina Chodorow <kristina@mongodb.org>
 
 =head1 AUTHORS
 
@@ -1010,7 +1028,7 @@ a value of 0.
 
 =item *
 
-David Golden <david@mongodb.com>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -1018,7 +1036,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.com>
+Kristina Chodorow <kristina@mongodb.org>
 
 =item *
 

@@ -19,9 +19,8 @@ package MongoDB::OID;
 # ABSTRACT: A Mongo Object ID
 
 use version;
-our $VERSION = 'v0.999.998.1'; # TRIAL
+our $VERSION = 'v0.707.1.0';
 
-use MongoDB::BSON;
 use Moose;
 use MongoDB;
 use namespace::clean -except => 'meta';
@@ -74,16 +73,8 @@ has value => (
     is      => 'ro',
     isa     => 'Str',
     required => 1,
-    builder => '_build_value',
+    builder => 'build_value',
 );
-
-# XXX need to set up typedef with str length
-# msg: "OIDs need to have a length of 24 bytes"
-
-sub _build_value {
-    my ($self) = @_;
-    return MongoDB::BSON::generate_oid();
-}
 
 around BUILDARGS => sub {
     my $orig = shift;
@@ -96,6 +87,12 @@ around BUILDARGS => sub {
     }
     return $class->$orig(@_);
 };
+
+sub build_value {
+    my $self = shift;
+
+    _build_value($self, @_ ? @_ : ());
+}
 
 #pod =head1 METHODS
 #pod
@@ -175,7 +172,7 @@ MongoDB::OID - A Mongo Object ID
 
 =head1 VERSION
 
-version v0.999.998.1
+version v0.707.1.0
 
 =head1 SYNOPSIS
 
@@ -257,7 +254,7 @@ C<{"$oid" : "012345678901234567890123"}>.
 
 =item *
 
-David Golden <david@mongodb.com>
+David Golden <david.golden@mongodb.org>
 
 =item *
 
@@ -265,7 +262,7 @@ Mike Friedman <friedo@mongodb.com>
 
 =item *
 
-Kristina Chodorow <kristina@mongodb.com>
+Kristina Chodorow <kristina@mongodb.org>
 
 =item *
 

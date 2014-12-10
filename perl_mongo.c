@@ -15,6 +15,7 @@
  */
 
 #include "perl_mongo.h"
+#include "mongo_link.h"
 
 #ifdef WIN32
 #include <memory.h>
@@ -1097,7 +1098,7 @@ const char * clean_key(const char * str, int is_insert) {
   }
 
   if (is_insert && strchr(str, '.')) {
-    croak("documents for storage cannot contain the . character");
+    croak("inserts cannot contain the . character");
   }
 
   if (special_char && SvPOK(special_char) && SvPV_nolen(special_char)[0] == str[0]) {
@@ -1582,7 +1583,7 @@ void perl_mongo_sv_to_buffer(buffer * buf, SV *sv, AV *ids)
   writer = bson_writer_new((uint8_t **)&buf->start, &buf_len, offset, &mongo_renew);
 
   bson_writer_begin(writer, &bson);
-  perl_mongo_sv_to_bson(bson, sv, ids!=0, ids);
+  perl_mongo_sv_to_bson(bson, sv, ids);
   bson_writer_end(writer);
 
   buf->end = buf->start + buf_len;
@@ -1592,7 +1593,8 @@ void perl_mongo_sv_to_buffer(buffer * buf, SV *sv, AV *ids)
 }
 
 void
-perl_mongo_sv_to_bson (bson_t * bson, SV *sv, int is_insert, AV *ids) {
+perl_mongo_sv_to_bson (bson_t * bson, SV *sv, AV *ids) {
+  int is_insert = ids != NO_PREP;
 
   if (!SvROK (sv)) {
     croak ("not a reference");

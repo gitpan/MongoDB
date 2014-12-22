@@ -20,7 +20,7 @@ package MongoDB::GridFS;
 # ABSTRACT: A file storage utility
 
 use version;
-our $VERSION = 'v0.707.1.0';
+our $VERSION = 'v0.707.2.0';
 
 use MongoDB::GridFS::File;
 use DateTime 0.78; # drops dependency on bug-prone Math::Round
@@ -426,7 +426,7 @@ MongoDB::GridFS - A file storage utility
 
 =head1 VERSION
 
-version v0.707.1.0
+version v0.707.2.0
 
 =head1 SYNOPSIS
 

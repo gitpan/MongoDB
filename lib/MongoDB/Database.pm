@@ -20,7 +20,7 @@ package MongoDB::Database;
 # ABSTRACT: A MongoDB Database
 
 use version;
-our $VERSION = 'v0.707.1.0';
+our $VERSION = 'v0.707.2.0';
 
 use MongoDB::CommandResult;
 use MongoDB::Error;
@@ -48,9 +48,27 @@ sub collection_names {
     my ($self) = @_;
 
     # try command style for 2.8+
-    my ($ok, @names) = try {
-        my $res = $self->_try_run_command([listCollections => 1]);
-        my @list = map { $_->{name} } @{$res->{collections}};
+    my ( $ok, @names ) = try {
+        my $command = Tie::IxHash->new( listCollections => 1, cursor => {} );
+        my $res     = $self->_try_run_command($command);
+        my @list;
+        # XXX RC0 - RC2 give collections result; RC3+ give cursor result
+        if ( $res->{collections} ) {
+            @list = map { $_->{name} } @{$res->{collections}};
+        }
+        else {
+            my $cursor  = MongoDB::Cursor->new(
+                started_iterating => 1,                 # we have the first batch
+                _client           => $self->_client,
+                _master           => $self->_client,    # fake this because we're already iterating
+                _ns               => $res->{cursor}{ns},
+                _agg_first_batch => $res->{cursor}{firstBatch},
+                _agg_batch_size  => scalar @{ $res->{cursor}{firstBatch} }, # for has_next
+                _query           => $command,
+            );
+            $cursor->_init( $res->{cursor}{id} );
+            @list = map { $_->{name} } $cursor->all;
+        }
         return 1, @list;
     };
     return @names if $ok;
@@ -160,7 +178,7 @@ MongoDB::Database - A MongoDB Database
 
 =head1 VERSION
 
-version v0.707.1.0
+version v0.707.2.0
 
 =head1 SYNOPSIS
 

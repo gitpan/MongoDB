@@ -8,7 +8,8 @@ use warnings;
 use Test::More tests => 1;
 
 my @commits = split /\n/, <<'EOC';
-8dc43cd PERL-465 added support for arbitrary options on index creation
+80ab0a7 PERL-476 support cursor in list indexes
+60b2b21 PERL-476 support cursor in list collections
 
 EOC
 
@@ -24,7 +25,7 @@ for my $commit ( @commits ) {
 
 # grab Changes lines from new version to next un-indented line
 open my $fh, "<:encoding(UTF-8)", "Changes";
-my @content = grep { /^v0.707.1.0(?:\s+|$)/ ... /^\S/ } <$fh>;
+my @content = grep { /^v0.707.2.0(?:\s+|$)/ ... /^\S/ } <$fh>;
 
 # drop the version line
 shift @content;
